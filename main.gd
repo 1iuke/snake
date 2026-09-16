@@ -1,4 +1,5 @@
 extends Node2D
+signal score_changed(new_score: int, new_high_score: int)
 
 const COLS := 20
 const ROWS := 20
@@ -34,6 +35,9 @@ func new_game() -> void:
 	direction = Vector2i.RIGHT
 	queued_direction = direction
 	score = 0
+	
+	score_changed.emit(score, high_score)
+
 	move_timer.start(start_speed)
 	game_over = false
 	paused = false
@@ -88,6 +92,7 @@ func step_game() -> void:
 	if ate_food:
 		score += 10
 		high_score = maxi(high_score, score)
+		score_changed.emit(score, high_score)
 		move_timer.wait_time = maxf(
 			MIN_SPEED,
 			start_speed - score * 0.0015)
@@ -134,18 +139,12 @@ func cell_rect(cell: Vector2i, inset := 2.0) -> Rect2:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(720, 800)), Color("10161d"))
-	draw_header()
 	draw_board()
 	draw_snake()
 	draw_footer()
 	if paused or game_over:
 		draw_overlay()
 
-
-func draw_header() -> void:
-	draw_string(ThemeDB.fallback_font, Vector2(60, 64), "SNAKE", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color("75e6a4"))
-	draw_string(ThemeDB.fallback_font, Vector2(60, 105), "SCORE  %04d" % score, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("eaf7ef"))
-	draw_string(ThemeDB.fallback_font, Vector2(480, 105), "BEST  %04d" % high_score, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("95a5b2"))
 
 
 func draw_board() -> void:

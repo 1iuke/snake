@@ -1,0 +1,147 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第五课：用自定义 Signal 解耦 HUD</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 05 · 约 30 分钟</p>
+<h1>用自定义 Signal 解耦 HUD</h1>
+<p class="lead">这一课的胜利条件：把标题和分数绘制移入独立 <code>Hud.tscn</code>，主游戏只发出 <code>score_changed</code>，不直接调用 HUD。</p>
+
+<h2>1. 为什么还要拆？</h2>
+<p>当前 <code>main.gd</code> 同时负责蛇的规则、计时、食物、分数和界面绘制。项目很小时没有问题；但如果 HUD 以后增加动画、生命值或菜单，主游戏会越来越了解 UI 的细节。</p>
+<pre><code># 紧耦合：主游戏必须认识 HUD
+$Hud.set_score(score)
+
+# 信号：主游戏只宣布事实
+score_changed.emit(score, high_score)</code></pre>
+<p>Signal 表达的是“发生了什么”，不是“别人应该怎么做”。HUD 可以响应它，音效系统或成就系统以后也可以独立响应。</p>
+
+<h2>2. 创建 Hud Scene</h2>
+<div class="card task">
+<ol>
+<li>新建 Scene，以 <code>Node2D</code> 为根节点，命名为 <code>Hud</code>。</li>
+<li>附加空脚本 <code>res://hud.gd</code>。</li>
+<li>保存为 <code>res://hud.tscn</code>。</li>
+</ol>
+</div>
+<p>将 <code>hud.gd</code> 写成：</p>
+<pre><code>extends Node2D
+
+var score := 0
+var high_score := 0
+
+
+func _on_snake_game_score_changed(
+    new_score: int,
+    new_high_score: int
+) -&gt; void:
+    score = new_score
+    high_score = new_high_score
+    queue_redraw()
+
+
+func _draw() -&gt; void:
+    draw_string(
+        ThemeDB.fallback_font,
+        Vector2(60, 64),
+        "SNAKE",
+        HORIZONTAL_ALIGNMENT_LEFT,
+        -1,
+        36,
+        Color("75e6a4")
+    )
+    draw_string(
+        ThemeDB.fallback_font,
+        Vector2(60, 105),
+        "SCORE  %04d" % score,
+        HORIZONTAL_ALIGNMENT_LEFT,
+        -1,
+        22,
+        Color("eaf7ef")
+    )
+    draw_string(
+        ThemeDB.fallback_font,
+        Vector2(480, 105),
+        "BEST  %04d" % high_score,
+        HORIZONTAL_ALIGNMENT_LEFT,
+        -1,
+        22,
+        Color("95a5b2")
+    )</code></pre>
+
+<h2>3. 把 HUD 实例放进主场景</h2>
+<ol>
+<li>重新打开 <code>main.tscn</code>。</li>
+<li>从 FileSystem 面板将 <code>hud.tscn</code> 拖到 Scene 树中的 <code>SnakeGame</code> 上。</li>
+<li>树应显示 <code>SnakeGame/Hud</code>，保存主场景。</li>
+</ol>
+<p>这是编辑器内实例化：与代码中的 <code>instantiate() + add_child()</code> 结果相同，但实例关系直接保存进 <code>main.tscn</code>。</p>
+
+<h2>4. 声明并连接自定义 Signal</h2>
+<p>在 <code>main.gd</code> 顶部、<code>extends Node2D</code> 之后添加：</p>
+<pre><code>signal score_changed(new_score: int, new_high_score: int)</code></pre>
+<p>保存脚本，然后：</p>
+<ol>
+<li>在 Scene 树选中 <code>SnakeGame</code>。</li>
+<li>打开右侧 <strong>Signals</strong> 标签。</li>
+<li>双击自定义的 <code>score_changed</code>。</li>
+<li>接收节点选择 <code>Hud</code>。</li>
+<li>方法名使用 <code>_on_snake_game_score_changed</code>。</li>
+<li>点击 Connect 并保存场景。</li>
+</ol>
+<div class="card"><strong>检查：</strong>连接方向是 <code>SnakeGame.score_changed → Hud._on_snake_game_score_changed</code>。不要反过来。</div>
+
+<h2>5. 在状态改变处 emit</h2>
+<h3>新游戏重置分数</h3>
+<p>在 <code>new_game()</code> 中，紧跟 <code>score = 0</code> 后添加：</p>
+<pre><code>score_changed.emit(score, high_score)</code></pre>
+
+<h3>吃到食物更新分数</h3>
+<p>在 <code>step_game()</code> 的 <code>if ate_food:</code> 内，更新 <code>score</code> 和 <code>high_score</code> 后添加：</p>
+<pre><code>score_changed.emit(score, high_score)</code></pre>
+<p>信号参数会按声明顺序传给 HUD 回调。</p>
+
+<h2>6. 删除主场景旧 HUD</h2>
+<p>否则屏幕会绘制两遍文字：</p>
+<ol>
+<li>在 <code>main.gd</code> 的 <code>_draw()</code> 中删除 <code>draw_header()</code>。</li>
+<li>删除整个 <code>draw_header()</code> 函数。</li>
+</ol>
+
+<h2>7. 验收与调试</h2>
+<div class="card task">
+<ol>
+<li>开始游戏：标题、SCORE、BEST 各显示一次。</li>
+<li>吃到食物：SCORE 立即增加 10。</li>
+<li>撞墙并重开：SCORE 回到 0，BEST 保留。</li>
+<li>运行时查看 Remote 树：应有 <code>SnakeGame/Hud</code>。</li>
+<li>打开 <code>main.gd</code>：它不应出现 <code>$Hud</code> 或 <code>get_node("Hud")</code>。</li>
+</ol>
+</div>
+<p>如果分数一直是 0，按顺序检查：是否 emit → 场景是否保存连接 → 回调参数是否一致 → 回调是否调用 <code>queue_redraw()</code>。</p>
+
+<h2>8. 事件链</h2>
+<pre><code>Snake 吃到 Food
+      ↓
+main.gd 修改 score
+      ↓
+score_changed.emit(score, high_score)
+      ↓  main.tscn 中的连接
+Hud 回调保存数据
+      ↓
+queue_redraw() → _draw()</code></pre>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>问题 1：主游戏是否知道 HUD 接收了信号？</summary><p>不知道。主游戏只声明并发出事件；连接可以在不修改发出者的情况下添加、删除或更换接收者。</p></details>
+<details><summary>问题 2：为什么信号名用 score_changed，而不是 update_hud？</summary><p>信号描述已发生的事实，而不是命令特定对象执行动作；这样 UI、声音和成就系统都能按需响应。</p></details>
+<details><summary>问题 3：emit 后为什么还要 queue_redraw？</summary><p>emit 只调用订阅回调；HUD 数据虽已变化，但自定义 Canvas 绘制仍需请求下一次 <code>_draw()</code>。</p></details>
+
+<h2>加一分挑战</h2>
+<p>临时在 <code>main.gd</code> 的 <code>_ready()</code> 中用代码再连接一个匿名接收者：</p>
+<pre><code>score_changed.connect(
+    func(value: int, _best: int) -&gt; void:
+        print("Score event: ", value)
+)</code></pre>
+<p>观察同一个信号如何同时通知 HUD 和调试输出，然后删除这段临时代码。</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/getting_started/step_by_step/signals.html#custom-signals">Using signals：Custom signals</a>。</p>
+
+<footer><a href="0004-timer-signals.html">← 第四课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“HUD 已解耦”</strong>，并回答：<em>为什么信号应该叫 score_changed，而不是 update_hud？</em></footer>
+</main></body></html>
