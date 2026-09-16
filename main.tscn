@@ -11,11 +11,9 @@ rules = ExtResource("2_h2yge")
 [node name="MoveTimer" type="Timer" parent="." unique_id=557227788]
 
 [node name="Hud" parent="." unique_id=1496063164 instance=ExtResource("2_0xm2m")]
-anchors_preset = 15
-offset_left = 362.0
-offset_top = 29.0
-offset_right = 362.0
-offset_bottom = 29.0
+anchors_preset = 10
+anchor_bottom = 0.0
+grow_vertical = 1
 
 [connection signal="score_changed" from="." to="Hud" method="_on_snake_game_score_changed"]
 [connection signal="timeout" from="MoveTimer" to="." method="_on_move_timer_timeout"]

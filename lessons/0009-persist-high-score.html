@@ -1,0 +1,112 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第九课：持久化最高分</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 09 · 约 25 分钟</p>
+<h1>让最高分跨越游戏重启</h1>
+<p class="lead">这一课的胜利条件：游戏结束时把最高分写入 <code>user://scores.cfg</code>，重新启动项目后正确加载。</p>
+
+<h2>1. res:// 与 user://</h2>
+<div class="map">
+<div><strong>res://</strong></div><div></div><div><strong>user://</strong></div>
+<div>项目资源目录</div><div class="arrow">vs</div><div>当前用户数据目录</div>
+<div>脚本、场景、纹理、规则</div><div class="arrow">vs</div><div>存档、设置、缓存</div>
+<div>导出后通常只读</div><div class="arrow">vs</div><div>跨平台保证可写</div>
+</div>
+<p>开发时写入项目目录可能碰巧成功，但导出为安装包后 <code>res://</code> 往往不可写。Godot 用 <code>user://</code> 抽象 Windows、macOS、Linux 和 Web 各自的用户数据位置。</p>
+
+<h2>2. 为什么选择 ConfigFile？</h2>
+<p>本课只保存一个整数，不需要完整 JSON 存档系统。<code>ConfigFile</code> 原生支持“节 + 键值”的配置格式：</p>
+<pre><code>[scores]
+high_score=120</code></pre>
+<p>它适合少量设置与简单进度；复杂世界状态再考虑 JSON、二进制序列化或专门的存档模型。</p>
+
+<h2>3. 定义存档路径</h2>
+<p>在 <code>main.gd</code> 的常量区域加入：</p>
+<pre><code>const SAVE_PATH := "user://scores.cfg"</code></pre>
+<p>路径集中定义可以避免加载与保存拼写不一致。</p>
+
+<h2>4. 编写加载函数</h2>
+<p>在 <code>main.gd</code> 中加入：</p>
+<pre><code>func load_high_score() -&gt; void:
+    var config := ConfigFile.new()
+    var error := config.load(SAVE_PATH)
+
+    if error == ERR_FILE_NOT_FOUND:
+        return
+    if error != OK:
+        push_warning("Could not load high score: %s" % error)
+        return
+
+    high_score = maxi(
+        0,
+        int(config.get_value("scores", "high_score", 0))
+    )</code></pre>
+<p>第一次运行没有文件是正常分支，不是故障。其他错误才输出警告。默认值 <code>0</code> 让旧文件缺少字段时仍可运行，<code>maxi(0, ...)</code> 防止负分进入状态。</p>
+
+<h2>5. 在正确时机加载</h2>
+<p>把 <code>_ready()</code> 调整为：</p>
+<pre><code>func _ready() -&gt; void:
+    randomize()
+    food_visual = FOOD_SCENE.instantiate()
+    add_child(food_visual)
+    load_high_score()
+    new_game()</code></pre>
+<p>必须在 <code>new_game()</code> 之前加载，因为 <code>new_game()</code> 会发出第一次 <code>score_changed</code>，HUD 应立即收到磁盘中的最高分。</p>
+
+<h2>6. 编写保存函数</h2>
+<pre><code>func save_high_score() -&gt; void:
+    var config := ConfigFile.new()
+    config.set_value("scores", "high_score", high_score)
+
+    var error := config.save(SAVE_PATH)
+    if error != OK:
+        push_error("Could not save high score: %s" % error)</code></pre>
+<p><code>set_value()</code> 只修改内存中的 ConfigFile；真正写盘必须调用 <code>save()</code>。</p>
+
+<h2>7. 在游戏结束时保存</h2>
+<p>把 <code>finish_game()</code> 改为：</p>
+<pre><code>func finish_game() -&gt; void:
+    move_timer.stop()
+    game_over = true
+    high_score = maxi(high_score, score)
+    save_high_score()
+    queue_redraw()</code></pre>
+<p>这里每局只写一次磁盘，足够简单。如果需要防止游戏中途退出丢失新纪录，可在最高分实际增加时保存，但要权衡写盘频率。</p>
+
+<h2>8. 验收</h2>
+<div class="card task">
+<ol>
+<li>运行游戏，至少吃到一个食物，然后撞墙结束。</li>
+<li>停止游戏，再次运行。</li>
+<li>BEST 应保留上局最高分。</li>
+<li>在 Godot 菜单选择 <strong>Project → Open User Data Folder</strong>。</li>
+<li>找到并打开 <code>scores.cfg</code>，确认数值正确。</li>
+<li>删除该文件并重新运行，BEST 应安全回到 0，且没有红色错误。</li>
+</ol>
+</div>
+
+<h2>9. 测试失败分支</h2>
+<p>将 <code>scores.cfg</code> 暂时改成无效内容，再运行游戏。目标不是让损坏文件自动修复，而是确认游戏不会崩溃，Debugger 会显示清楚的警告。测试后删除损坏文件。</p>
+<div class="card"><strong>边界意识：</strong>“文件不存在”是首次运行的正常状态；“文件存在但无法解析”才值得记录。不要把所有非 OK 错误都静默吞掉。</div>
+
+<h2>10. ConfigFile 与 GameRules 的区别</h2>
+<ul>
+<li><code>GameRules.tres</code>：开发者制作并随游戏发布的静态内容，位于 <code>res://</code>。</li>
+<li><code>scores.cfg</code>：玩家运行游戏产生的个人数据，位于 <code>user://</code>。</li>
+</ul>
+<p>两者都包含数据，但所有权、生命周期和写入权限不同。</p>
+
+<h2>11. 闭卷检索</h2>
+<details><summary>问题 1：为什么不能把最高分写入 res://？</summary><p>导出后的项目资源通常位于只读包中；<code>user://</code> 才是 Godot 跨平台保证可写的用户数据目录。</p></details>
+<details><summary>问题 2：为什么 load_high_score 要在 new_game 前调用？</summary><p><code>new_game()</code> 会立即发出分数信号；提前加载可确保 HUD 第一次刷新就显示磁盘中的最高分。</p></details>
+<details><summary>问题 3：set_value 后为什么还要 save？</summary><p><code>set_value()</code> 只改变内存中的 ConfigFile 对象，<code>save()</code> 才把数据序列化并写入磁盘。</p></details>
+
+<h2>加一分挑战</h2>
+<p>在同一个配置文件加入累计游戏局数：</p>
+<pre><code>var games_played := int(config.get_value("stats", "games_played", 0))
+config.set_value("stats", "games_played", games_played + 1)</code></pre>
+<p>先思考它应该在“开始一局”还是“结束一局”增加，并说明你的产品定义。</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 官方 <a href="https://docs.godotengine.org/en/stable/tutorials/scripting/filesystem.html">File system</a> 的 Resource path 与 User path，并浏览 <a href="https://docs.godotengine.org/en/4.7/tutorials/io/saving_games.html">Saving games</a> 的 Introduction。</p>
+
+<footer><a href="0008-control-ui-layout.html">← 第八课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“最高分已持久化”</strong>，并回答：<em>为什么玩家数据应写入 user://，而不是 res://？</em><br>待修项：<code>main.tscn</code> 中 Hud 实例的四个 Offset 仍需清零。</footer>
+</main></body></html>

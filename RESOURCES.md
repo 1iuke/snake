@@ -30,6 +30,10 @@
   官方 Control、内容控件与布局容器入口。用于构建可适配窗口尺寸的 HUD 和菜单。
 - [Godot：Size and anchors](https://docs.godotengine.org/en/stable/tutorials/ui/size_and_anchors.html)
   官方锚点与偏移说明。用于理解 Control 相对父级和视口的布局行为。
+- [Godot 4.7：保存游戏](https://docs.godotengine.org/en/4.7/tutorials/io/saving_games.html)
+  官方持久化、序列化和读写示例。用于理解应保存哪些运行时状态。
+- [Godot：File system 与 user://](https://docs.godotengine.org/en/stable/tutorials/scripting/filesystem.html)
+  官方项目资源路径与用户数据路径说明。用于区分只读游戏资源和可写用户存档。
 
 ## Wisdom (Communities)
 
