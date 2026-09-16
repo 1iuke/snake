@@ -1,0 +1,111 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第八课：用 Control 构建自适应 HUD</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 08 · 约 35 分钟</p>
+<h1>用 Control 构建自适应 HUD</h1>
+<p class="lead">这一课的胜利条件：删除 HUD 的手写文字绘制，改用 <code>Control</code>、<code>MarginContainer</code>、<code>HBoxContainer</code> 和 <code>Label</code>，缩放窗口时布局保持稳定。</p>
+
+<h2>1. 2D 世界与 UI 是两套布局模型</h2>
+<div class="map">
+<div><strong>Node2D</strong></div><div></div><div><strong>Control</strong></div>
+<div>位置、旋转、缩放</div><div class="arrow">vs</div><div>矩形、锚点、偏移</div>
+<div>游戏世界对象</div><div class="arrow">vs</div><div>界面元素</div>
+<div>手动或物理移动</div><div class="arrow">vs</div><div>由 Container 自动排布</div>
+</div>
+<p>当前 HUD 用固定坐标 <code>draw_string(Vector2(60, 64), ...)</code> 绘制。它看起来正确，却没有利用 Godot 的 UI 布局、主题、焦点和可访问性能力。</p>
+
+<h2>2. 将 Hud 根节点改为 Control</h2>
+<div class="card task">
+<ol>
+<li>打开 <code>hud.gd</code>，先把第一行改为 <code>extends Control</code> 并保存。</li>
+<li>打开 <code>hud.tscn</code>，右键根节点 Hud，选择 <strong>Change Type</strong>，改为 <code>Control</code>。</li>
+<li>选中 Hud，在 2D 顶部 <strong>Layout</strong> 菜单选择 <strong>Full Rect</strong>。</li>
+<li>Inspector 将 <strong>Mouse → Filter</strong> 设为 <strong>Ignore</strong>，避免纯显示 HUD 截获玩法输入。</li>
+</ol>
+</div>
+<p>Full Rect 把四个锚点放到父级四角，并将相应偏移设为 0。窗口变化时 Hud 的矩形跟随视口。</p>
+
+<h2>3. 建立布局树</h2>
+<p>在 Hud 下按以下层级添加节点：</p>
+<pre><code>Hud (Control)
+└── Margin (MarginContainer)
+    └── Row (HBoxContainer)
+        ├── TitleLabel (Label)
+        ├── Spacer (Control)
+        ├── ScoreLabel (Label)
+        ├── Gap (Control)
+        └── BestLabel (Label)</code></pre>
+<p>配置：</p>
+<ol>
+<li>对 <code>Margin</code> 选择 Layout → Full Rect。</li>
+<li>在 Margin 的 Theme Overrides → Constants 中，把 Left/Right 设为 <code>60</code>，Top 设为 <code>35</code>。</li>
+<li>选中 <code>Spacer</code>，Horizontal Size Flags 勾选 <strong>Fill + Expand</strong>。</li>
+<li>将 <code>Gap</code> 的 Custom Minimum Size X 设为 <code>40</code>。</li>
+</ol>
+<div class="card"><strong>规则：</strong>Control 一旦成为 Container 的直接子节点，它的位置和尺寸就由 Container 管理。不要拖动 Row 内的 Label；用 Size Flags、最小尺寸和容器主题常量表达布局意图。</div>
+
+<h2>4. 配置三个 Label</h2>
+<p>分别设置 Text：</p>
+<pre><code>TitleLabel  → SNAKE
+ScoreLabel  → SCORE  0000
+BestLabel   → BEST  0000</code></pre>
+<p>在各自 Inspector 的 Theme Overrides 中设置：</p>
+<ul>
+<li>TitleLabel：Font Sizes → Font Size = <code>36</code>；Font Colors → Font Color = <code>#75e6a4</code></li>
+<li>ScoreLabel：Font Size = <code>22</code>；Font Color = <code>#eaf7ef</code></li>
+<li>BestLabel：Font Size = <code>22</code>；Font Color = <code>#95a5b2</code></li>
+</ul>
+<p>右键 <code>ScoreLabel</code> 和 <code>BestLabel</code>，启用 <strong>Access as Unique Name</strong>。节点名称旁会出现百分号标记。</p>
+
+<h2>5. 用节点引用替换 _draw()</h2>
+<p>把 <code>hud.gd</code> 完整替换为：</p>
+<pre><code>extends Control
+
+@onready var score_label: Label = %ScoreLabel
+@onready var best_label: Label = %BestLabel
+
+
+func _on_snake_game_score_changed(
+    new_score: int,
+    new_high_score: int
+) -&gt; void:
+    score_label.text = "SCORE  %04d" % new_score
+    best_label.text = "BEST  %04d" % new_high_score</code></pre>
+<p>不再保存重复的 score 状态，也不再调用 <code>queue_redraw()</code>。Label 的 <code>text</code> 改变时，它会自行更新最小尺寸并触发布局。</p>
+
+<h2>6. %Name 与 $Path</h2>
+<pre><code>$Margin/Row/ScoreLabel  # 依赖完整树路径
+%ScoreLabel             # 依赖场景内唯一名称</code></pre>
+<p>HUD 的布局层级可能增加 Panel 或动画容器。唯一名称允许内部重排而不改脚本路径。它只在所属 Scene 范围内保证唯一，不是全局查找。</p>
+
+<h2>7. 验收窗口适配</h2>
+<div class="card task">
+<ol>
+<li>运行游戏，确认三个文本只显示一次。</li>
+<li>吃食物后，ScoreLabel 正确更新。</li>
+<li>拖动游戏窗口边缘改变宽度。</li>
+<li>SNAKE 应保持左侧边距，分数区域应保持右侧边距。</li>
+<li>选中 Row 内 Label 尝试拖动，观察 Container 如何接管位置。</li>
+<li>Remote 树中展开 Hud，确认完整 Control 节点层级。</li>
+</ol>
+</div>
+
+<h2>8. Anchors 与 Containers 的职责</h2>
+<ul>
+<li><strong>Anchors：</strong>决定一个 Control 的边缘相对父级哪个位置。</li>
+<li><strong>Offsets：</strong>从锚点位置再偏移多少像素。</li>
+<li><strong>Containers：</strong>根据子节点最小尺寸和 Size Flags 自动排列直接子节点。</li>
+<li><strong>Theme：</strong>提供字体、颜色、间距和样式；可局部覆盖，也可整棵 UI 共享。</li>
+</ul>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>问题 1：为什么不应该手动拖动 HBoxContainer 的直接子节点？</summary><p>Container 会根据最小尺寸、Size Flags 和主题间距重新计算直接子节点的位置，手动矩形值会被覆盖。</p></details>
+<details><summary>问题 2：Full Rect 实际改变了什么？</summary><p>它把四个锚点对齐父级四边，并把相应偏移设为 0，使 Control 的矩形随父级尺寸变化。</p></details>
+<details><summary>问题 3：%ScoreLabel 相比完整 $ 路径有什么优势？</summary><p>它依赖场景内唯一名称而非完整层级，因此重排中间布局节点时，脚本引用不必跟着修改。</p></details>
+
+<h2>加一分挑战</h2>
+<p>将 <code>Gap</code> 删除，改用 Row 的 Theme Overrides → Constants → Separation 控制所有相邻元素间距。比较两种方法：统一间距适合 Separation；只在某一处留白适合 Spacer 或固定最小尺寸。</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/tutorials/ui/index.html">User interface</a> 的 UI building blocks，并继续阅读其中的 <em>Size and anchors</em> 与 <em>Using Containers</em>。</p>
+
+<footer><a href="0007-custom-resources.html">← 第七课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“Control HUD 已完成”</strong>，并回答：<em>为什么 Container 的直接子节点不应该靠手动拖动来定位？</em><br>尚未补答：为什么当前 score 不适合放进共享的 GameRules？</footer>
+</main></body></html>

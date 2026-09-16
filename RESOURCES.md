@@ -26,6 +26,10 @@
   官方跨键盘与控制器输入指南。用于设计设备无关的控制方案。
 - [Godot：Resources](https://docs.godotengine.org/en/stable/tutorials/scripting/resources.html)
   官方 Resource、序列化和自定义数据资产说明。用于创建 Inspector 可编辑的 `.tres` 配置。
+- [Godot 4.7：用户界面](https://docs.godotengine.org/en/4.7/tutorials/ui/index.html)
+  官方 Control、内容控件与布局容器入口。用于构建可适配窗口尺寸的 HUD 和菜单。
+- [Godot：Size and anchors](https://docs.godotengine.org/en/stable/tutorials/ui/size_and_anchors.html)
+  官方锚点与偏移说明。用于理解 Control 相对父级和视口的布局行为。
 
 ## Wisdom (Communities)
 
