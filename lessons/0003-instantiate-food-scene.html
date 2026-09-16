@@ -1,0 +1,96 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第三课：实例化 Food Scene</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 03 · 约 25 分钟</p>
+<h1>把食物变成可实例化的 Scene</h1>
+<p class="lead">这一课的胜利条件：创建独立的 <code>Food.tscn</code>，在运行时实例化并加入 SceneTree，同时保持贪吃蛇玩法不变。</p>
+
+<h2>1. 先分清“蓝图”和“活对象”</h2>
+<div class="map">
+<div><strong>PackedScene</strong></div><div class="arrow">instantiate()</div><div><strong>Node 实例</strong></div>
+<div>磁盘上的序列化场景资源</div><div class="arrow">→</div><div>内存中的节点树</div>
+<div>不能自己参与游戏循环</div><div class="arrow">→</div><div>加入 SceneTree 后开始工作</div>
+</div>
+<pre><code>const FOOD_SCENE := preload("res://food.tscn") # PackedScene
+var food_visual := FOOD_SCENE.instantiate()     # Node 实例
+add_child(food_visual)                          # 加入 SceneTree</code></pre>
+<p>它对应 Unity 的“加载 Prefab → Instantiate → 放进 Hierarchy”，但 Godot 加载的仍是普通 Scene。</p>
+
+<h2>2. 创建 Food Scene</h2>
+<div class="card task">
+<ol>
+<li>Godot 顶部菜单选择 <strong>Scene → New Scene</strong>。</li>
+<li>选择 <strong>Other Node</strong>，搜索并创建 <code>Node2D</code>。</li>
+<li>将根节点重命名为 <code>Food</code>。</li>
+<li>给它附加脚本，路径设为 <code>res://food.gd</code>，模板选择 Empty。</li>
+<li>将场景保存为 <code>res://food.tscn</code>。</li>
+</ol>
+</div>
+<p>把 <code>food.gd</code> 写成：</p>
+<pre><code>extends Node2D
+
+func _draw() -&gt; void:
+    draw_circle(Vector2.ZERO, 10.0, Color("ff6b6b"))
+    draw_line(Vector2(2, -9), Vector2(7, -15), Color("75e6a4"), 3.0)</code></pre>
+<p>这里让食物自己的原点成为圆心。位置不属于食物的固定定义，而由主场景中的实例决定。</p>
+
+<h2>3. 在主场景实例化</h2>
+<p>重新打开 <code>main.tscn</code> 和 <code>main.gd</code>，分四步修改。</p>
+
+<h3>① 预加载场景资源</h3>
+<p>在其他 <code>const</code> 附近加入：</p>
+<pre><code>const FOOD_SCENE := preload("res://food.tscn")</code></pre>
+
+<h3>② 保存实例引用</h3>
+<p>在成员变量区域加入：</p>
+<pre><code>var food_visual: Node2D</code></pre>
+
+<h3>③ 创建实例并加入树</h3>
+<p>将 <code>_ready()</code> 改为：</p>
+<pre><code>func _ready() -&gt; void:
+    randomize()
+    food_visual = FOOD_SCENE.instantiate()
+    add_child(food_visual)
+    set_process(true)
+    new_game()</code></pre>
+<p>顺序很重要：<code>new_game()</code> 会调用 <code>spawn_food()</code>，因此必须先创建 <code>food_visual</code>。</p>
+
+<h3>④ 让实例跟随网格坐标</h3>
+<p>在 <code>spawn_food()</code> 最后一行，即设置完 <code>food</code> 后加入：</p>
+<pre><code>food_visual.position = (
+    BOARD_ORIGIN
+    + Vector2(food) * CELL_SIZE
+    + Vector2.ONE * CELL_SIZE / 2.0
+)</code></pre>
+
+<h2>4. 移交绘制职责</h2>
+<p>现在 Food Scene 已经自己绘制食物，主脚本不能再画一次：</p>
+<ol>
+<li>在 <code>main.gd</code> 的 <code>_draw()</code> 中删除 <code>draw_food()</code>。</li>
+<li>删除整个 <code>draw_food()</code> 函数。</li>
+<li>保存并运行项目。</li>
+</ol>
+<div class="card"><strong>验收：</strong>屏幕上只有一个食物；蛇吃到它后，原来的 Food 实例移动到新网格；分数与碰撞逻辑保持不变。运行时切换到编辑器的 <strong>Remote</strong> 场景树，应看到 <code>SnakeGame/ Food</code>。</div>
+
+<h2>5. 发生了什么？</h2>
+<pre><code>food.tscn --preload--&gt; PackedScene
+PackedScene --instantiate--&gt; Food(Node2D)
+SnakeGame --add_child--&gt; Food 进入 SceneTree
+spawn_food --position--&gt; Food 移到网格中心</code></pre>
+<p>这次只创建一个实例并反复移动它。若是子弹或敌人，则会在每次生成时调用 <code>instantiate()</code>，产生多个互相独立的节点树。</p>
+
+<h2>6. preload 与 load</h2>
+<ul>
+<li><code>preload("固定路径")</code>：解析脚本时加载；路径必须是常量，适合确定依赖。</li>
+<li><code>load(path)</code>：运行时按路径加载；适合路径动态决定的内容。</li>
+</ul>
+<p>当前食物场景永远确定，所以使用 <code>preload</code> 更清晰。</p>
+
+<h2>7. 闭卷检索</h2>
+<details><summary>问题 1：preload 得到的是屏幕上的 Food 节点吗？</summary><p>不是。它得到 <code>PackedScene</code> 资源；调用 <code>instantiate()</code> 才创建节点实例。</p></details>
+<details><summary>问题 2：为什么 instantiate() 后还要 add_child()？</summary><p>实例化只在内存中创建节点树；加入 SceneTree 后，它才获得树内生命周期并参与处理与绘制。</p></details>
+<details><summary>问题 3：为什么 Godot 不需要独立 Prefab 文件类型？</summary><p>任何保存的 Scene 都是可加载和实例化的 <code>PackedScene</code>，因此同一机制已覆盖 Prefab 的职责。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/classes/class_packedscene.html">PackedScene</a> 的 Description 和 <code>instantiate()</code> 方法说明。</p>
+
+<footer><a href="0002-script-meets-inspector.html">← 第二课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“Food 已实例化”</strong>，并回答：<em>instantiate() 与 add_child() 分别做了什么？</em> 如果出现报错，请直接发截图或错误文本，我会沿启动链和 SceneTree 帮你定位。</footer>
+</main></body></html>

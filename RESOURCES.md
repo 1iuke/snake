@@ -16,6 +16,8 @@
   官方 `@export` 与 Inspector 属性说明。用于把程序参数变成场景可配置数据。
 - [Godot 4.7：Godot 中的面向对象原则](https://docs.godotengine.org/en/4.7/tutorials/best_practices/what_are_godot_classes.html)
   官方解释脚本与场景如何共同构成可复用对象。用于理解代码和场景各自的职责。
+- [Godot 4.7：PackedScene 类](https://docs.godotengine.org/en/4.7/classes/class_packedscene.html)
+  官方场景资源与 `instantiate()` API 说明。用于动态创建可复用场景实例。
 
 ## Wisdom (Communities)
 

@@ -4,4 +4,4 @@
 
 [node name="SnakeGame" type="Node2D" unique_id=2054477713]
 script = ExtResource("1")
-start_speed = 0.39999999999999997
+start_speed = 0.08

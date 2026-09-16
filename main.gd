@@ -11,6 +11,9 @@ var snake: Array[Vector2i] = []
 var direction := Vector2i.RIGHT
 var queued_direction := Vector2i.RIGHT
 var food := Vector2i.ZERO
+const FOOD_SCENE := preload("res://food.tscn")
+var food_visual: Node2D
+
 var score := 0
 var high_score := 0
 var move_timer := 0.0
@@ -21,6 +24,8 @@ var paused := false
 
 func _ready() -> void:
 	randomize()
+	food_visual = FOOD_SCENE.instantiate()
+	add_child(food_visual)
 	set_process(true)
 	new_game()
 
@@ -111,6 +116,12 @@ func spawn_food() -> void:
 		finish_game()
 		return
 	food = free_cells[randi() % free_cells.size()]
+	
+	food_visual.position = (
+	BOARD_ORIGIN
+	+ Vector2(food) * CELL_SIZE
+	+ Vector2.ONE * CELL_SIZE / 2.0
+)
 
 
 func finish_game() -> void:
@@ -130,7 +141,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(720, 800)), Color("10161d"))
 	draw_header()
 	draw_board()
-	draw_food()
+	#draw_food()
 	draw_snake()
 	draw_footer()
 	if paused or game_over:
@@ -165,11 +176,6 @@ func draw_snake() -> void:
 		draw_circle(center + front + side, 2.2, Color("10161d"))
 		draw_circle(center + front - side, 2.2, Color("10161d"))
 
-
-func draw_food() -> void:
-	var center := cell_rect(food, 0.0).get_center()
-	draw_circle(center, 10.0, Color("ff6b6b"))
-	draw_line(center + Vector2(2, -9), center + Vector2(7, -15), Color("75e6a4"), 3.0)
 
 
 func draw_footer() -> void:
