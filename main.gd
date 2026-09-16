@@ -16,8 +16,6 @@ var food_visual: Node2D
 
 var score := 0
 var high_score := 0
-#var move_timer := 0.0
-#var move_interval := start_speed
 @onready var move_timer: Timer = $MoveTimer
 
 var game_over := false
@@ -79,9 +77,7 @@ func step_game() -> void:
 	direction = queued_direction
 	var new_head := snake[0] + direction
 	var ate_food := new_head == food
-	move_timer.wait_time = maxf(
-			MIN_SPEED,
-			start_speed - score * 0.0015)
+
 	if not ate_food:
 		snake.pop_back()
 	if is_outside_board(new_head) or new_head in snake:
@@ -92,7 +88,9 @@ func step_game() -> void:
 	if ate_food:
 		score += 10
 		high_score = maxi(high_score, score)
-		
+		move_timer.wait_time = maxf(
+			MIN_SPEED,
+			start_speed - score * 0.0015)
 		spawn_food()
 	queue_redraw()
 
@@ -138,7 +136,6 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(720, 800)), Color("10161d"))
 	draw_header()
 	draw_board()
-	#draw_food()
 	draw_snake()
 	draw_footer()
 	if paused or game_over:
