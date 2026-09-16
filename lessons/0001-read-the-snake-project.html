@@ -1,0 +1,70 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第一课：读懂 Godot 项目</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 01 · 约 15 分钟</p>
+<h1>从三份文件读懂 Godot 项目</h1>
+<p class="lead">这一课的胜利条件：你能解释按下 F6 与 F5 为什么可能得到不同结果，并能指出当前贪吃蛇的“对象、行为、入口”分别在哪里。</p>
+
+<h2>1. 先建立一个不同于 Unity 的模型</h2>
+<p>Godot 游戏是一棵 <strong>Node 树</strong>。一棵保存下来的 Node 树叫 <strong>Scene</strong>；运行时所有 Scene 汇入 <strong>SceneTree</strong>。官方把 Node、Scene、SceneTree 和 Signal 列为四个核心概念。</p>
+<div class="map">
+<div>Unity：Scene 与 Prefab</div><div class="arrow">→</div><div>Godot：都用 Scene 表示</div>
+<div>Unity：GameObject + Component</div><div class="arrow">→</div><div>Godot：带类型的 Node + 子节点</div>
+<div>Unity：Hierarchy</div><div class="arrow">→</div><div>Godot：SceneTree</div>
+</div>
+<p><a href="../reference/unity-to-godot.html">打开完整 Unity → Godot 速查表</a></p>
+
+<h2>2. 沿着启动链追踪项目</h2>
+<h3>① project.godot：项目入口</h3>
+<pre><code>[application]
+config/name="Snake"
+run/main_scene="res://main.tscn"</code></pre>
+<p><code>res://</code> 永远指向项目根目录。F5 运行项目时，Godot 读取 <code>run/main_scene</code>。因此这里决定了项目从哪一幕开始。</p>
+
+<h3>② main.tscn：场景与节点</h3>
+<pre><code>[node name="SnakeGame" type="Node2D"]
+script = ExtResource("1")</code></pre>
+<p>当前 Scene 只有一个名为 <code>SnakeGame</code> 的 <code>Node2D</code>。它没有 Unity 式 Transform 组件；二维变换能力来自 <code>Node2D</code> 这个节点类型本身。</p>
+
+<h3>③ main.gd：节点获得行为</h3>
+<pre><code>extends Node2D
+
+func _ready() -&gt; void:
+    new_game()
+
+func _process(delta: float) -&gt; void:
+    # 每个渲染帧由引擎调用
+    pass
+
+func _draw() -&gt; void:
+    # queue_redraw() 后由引擎调用
+    pass</code></pre>
+<p><code>extends Node2D</code> 表示这个脚本扩展 Node2D。以下划线开头的这些函数是引擎约定的虚方法，不是我们手动调用的普通入口。</p>
+
+<h2>3. 生命周期：先记住三个点</h2>
+<ul>
+<li><code>_ready()</code>：节点及其子节点进入 SceneTree 并准备完成后调用一次。</li>
+<li><code>_process(delta)</code>：按渲染帧调用；本项目用累加器把它降频成离散蛇步。</li>
+<li><code>_draw()</code>：负责自定义绘制；调用 <code>queue_redraw()</code> 请求下一次重绘。</li>
+</ul>
+<div class="card"><strong>为什么这里不是 _physics_process？</strong><br>蛇按网格离散跳动，没有使用物理引擎求解碰撞。若是 CharacterBody2D 的连续移动和物理碰撞，才优先放进固定频率的 <code>_physics_process()</code>。</div>
+
+<h2>4. 现在动手：三分钟实验</h2>
+<div class="card task">
+<ol>
+<li>在 Godot 中双击打开 <code>main.tscn</code>。</li>
+<li>在 Scene 面板选中 <code>SnakeGame</code>，观察它的类型与已附加脚本。</li>
+<li>按 F6：运行当前 Scene；关闭后再按 F5：运行项目。</li>
+<li>暂时把 <code>project.godot</code> 的 <code>run/main_scene</code> 值读出来，不要修改。</li>
+</ol>
+</div>
+
+<h2>5. 闭卷检索</h2>
+<p>先不回看上文，在脑中回答，再展开答案。</p>
+<details><summary>问题 1：当前项目最小的启动链是什么？</summary><p><code>project.godot → main.tscn → SnakeGame(Node2D) → main.gd</code>。</p></details>
+<details><summary>问题 2：Scene 更接近 Unity 的 Scene 还是 Prefab？</summary><p>两者都是。Godot 用同一种 Scene 机制表达关卡、角色、菜单和可复用对象。</p></details>
+<details><summary>问题 3：为什么吃到食物后调用 queue_redraw()？</summary><p>游戏状态已经变化，需要请求 CanvasItem 在下一绘制阶段再次执行 <code>_draw()</code>，把新状态呈现在屏幕上。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读官方文档 <a href="https://docs.godotengine.org/en/4.7/getting_started/introduction/key_concepts_overview.html">Overview of Godot's key concepts</a>。只读 Node、Scene、SceneTree、Signal 四节，不需要扩展阅读。</p>
+
+<footer>完成后告诉我：<strong>“完成第一课”</strong>，并用一句话回答：<em>Godot 的 Scene 与 Unity Prefab 最关键的关系是什么？</em> 我会根据你的答案记录掌握情况并生成下一课。任何不清楚的地方也可以直接追问。</footer>
+</main></body></html>

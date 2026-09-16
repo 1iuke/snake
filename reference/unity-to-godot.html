@@ -1,0 +1,17 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Unity → Godot 速查</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Reference 01</p><h1>Unity → Godot 速查</h1>
+<div class="map">
+<div><strong>Unity</strong></div><div></div><div><strong>Godot</strong></div>
+<div>GameObject + Component</div><div class="arrow">→</div><div>Node（继承决定能力）</div>
+<div>Scene / Prefab</div><div class="arrow">→</div><div>Scene（两者统一）</div>
+<div>Hierarchy</div><div class="arrow">→</div><div>SceneTree</div>
+<div>MonoBehaviour</div><div class="arrow">→</div><div>附着到 Node 的 Script</div>
+<div>Awake / Start</div><div class="arrow">→</div><div>_enter_tree / _ready</div>
+<div>Update</div><div class="arrow">→</div><div>_process(delta)</div>
+<div>FixedUpdate</div><div class="arrow">→</div><div>_physics_process(delta)</div>
+<div>UnityEvent / C# event</div><div class="arrow">→</div><div>Signal</div>
+<div>ScriptableObject</div><div class="arrow">→</div><div>Resource</div>
+</div>
+<p><strong>关键差异：</strong>Unity 通常给空容器附加多个组件；Godot 通常先选一种具备所需能力的 Node 类型，再用子节点组合额外能力。Scene 同时承担“关卡”和“Prefab”的角色。</p>
+<footer>课程速查资料 · <a href="../lessons/0001-read-the-snake-project.html">返回第一课</a></footer>
+</main></body></html>
