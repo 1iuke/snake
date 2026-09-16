@@ -48,28 +48,22 @@ func new_game() -> void:
 
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not event is InputEventKey:
-		return
-	var key_event := event as InputEventKey
-	if not key_event.pressed or key_event.echo:
-		return
-	match key_event.keycode:
-		KEY_UP, KEY_W:
-			queue_direction(Vector2i.UP)
-		KEY_DOWN, KEY_S:
-			queue_direction(Vector2i.DOWN)
-		KEY_LEFT, KEY_A:
-			queue_direction(Vector2i.LEFT)
-		KEY_RIGHT, KEY_D:
-			queue_direction(Vector2i.RIGHT)
-		KEY_P, KEY_SPACE:
-			if not game_over:
-				paused = not paused
-				queue_redraw()
-		KEY_ENTER, KEY_KP_ENTER, KEY_R:
-			if game_over:
-				new_game()
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("move_up"):
+		queue_direction(Vector2i.UP)
+	elif event.is_action_pressed("move_down"):
+		queue_direction(Vector2i.DOWN)
+	elif event.is_action_pressed("move_left"):
+		queue_direction(Vector2i.LEFT)
+	elif event.is_action_pressed("move_right"):
+		queue_direction(Vector2i.RIGHT)
+	elif event.is_action_pressed("pause_game"):
+		if not game_over:
+			paused = not paused
+			queue_redraw()
+	elif event.is_action_pressed("restart_game"):
+		if game_over:
+			new_game()
 
 
 func queue_direction(next_direction: Vector2i) -> void:

@@ -1,0 +1,114 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第六课：用 Input Map 抽象控制</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 06 · 约 25 分钟</p>
+<h1>让游戏理解“动作”，而不是按键</h1>
+<p class="lead">这一课的胜利条件：代码只判断 <code>move_up</code> 等语义动作，同一动作同时接受方向键、WASD 和手柄输入。</p>
+
+<h2>1. 当前代码耦合了设备</h2>
+<pre><code>match key_event.keycode:
+    KEY_UP, KEY_W:
+        queue_direction(Vector2i.UP)</code></pre>
+<p>这里把“向上移动”与两个具体键写死在一起。如果增加手柄、改键或触屏，游戏规则也要修改。</p>
+<div class="map">
+<div>Keyboard W / ↑</div><div class="arrow">Input Map</div><div>move_up</div>
+<div>Gamepad D-pad ↑</div><div class="arrow">Input Map</div><div>move_up</div>
+<div>Left Stick ↑</div><div class="arrow">Input Map</div><div>move_up</div>
+</div>
+<p>游戏代码只接收右侧的动作名称。左侧设备映射属于项目配置。</p>
+
+<h2>2. 创建六个动作</h2>
+<div class="card task">
+<ol>
+<li>打开 <strong>Project → Project Settings → Input Map</strong>。</li>
+<li>依次新增下表中的动作，动作名使用 <code>snake_case</code>。</li>
+<li>点击每个动作右侧的加号，为它添加输入事件。</li>
+</ol>
+</div>
+<table>
+<thead><tr><th>Action</th><th>Keyboard</th><th>Joypad</th></tr></thead>
+<tbody>
+<tr><td><code>move_up</code></td><td>↑、W</td><td>D-pad Up</td></tr>
+<tr><td><code>move_down</code></td><td>↓、S</td><td>D-pad Down</td></tr>
+<tr><td><code>move_left</code></td><td>←、A</td><td>D-pad Left</td></tr>
+<tr><td><code>move_right</code></td><td>→、D</td><td>D-pad Right</td></tr>
+<tr><td><code>pause_game</code></td><td>Space、P</td><td>Start</td></tr>
+<tr><td><code>restart_game</code></td><td>Enter、R</td><td>A / Bottom Button</td></tr>
+</tbody>
+</table>
+<p>WASD 建议选择 <strong>Physical Key</strong>，这样不同键盘布局仍按物理位置控制；文字输入快捷键才通常关心字符标签。</p>
+
+<h2>3. 查看配置落在哪里</h2>
+<p>保存后，Input Map 会写入 <code>project.godot</code> 的 <code>[input]</code> 区域。它不是编辑器私有设置，而是项目的一部分，应随版本控制提交。</p>
+<pre><code>[input]
+
+move_up={
+"deadzone": 0.2,
+"events": [Object(InputEventKey, ...), ...]
+}</code></pre>
+<p>不要手写这段复杂序列化内容；使用编辑器维护即可。</p>
+
+<h2>4. 用动作事件替换键盘事件</h2>
+<p>完整删除当前的 <code>_unhandled_key_input()</code>，换成：</p>
+<pre><code>func _unhandled_input(event: InputEvent) -&gt; void:
+    if event.is_action_pressed("move_up"):
+        queue_direction(Vector2i.UP)
+    elif event.is_action_pressed("move_down"):
+        queue_direction(Vector2i.DOWN)
+    elif event.is_action_pressed("move_left"):
+        queue_direction(Vector2i.LEFT)
+    elif event.is_action_pressed("move_right"):
+        queue_direction(Vector2i.RIGHT)
+    elif event.is_action_pressed("pause_game"):
+        if not game_over:
+            paused = not paused
+            queue_redraw()
+    elif event.is_action_pressed("restart_game"):
+        if game_over:
+            new_game()</code></pre>
+<p><code>_unhandled_input</code> 接收各种 InputEvent，不再限定为键盘。<code>event.is_action_pressed()</code> 判断当前事件是否匹配 Input Map 中的动作。</p>
+
+<h2>5. Event 与 Polling 怎么选？</h2>
+<div class="map">
+<div><strong>事件 event</strong></div><div></div><div><strong>状态轮询 Input</strong></div>
+<div>“刚刚按下”触发一次</div><div class="arrow">vs</div><div>“当前是否按住”持续查询</div>
+<div>菜单、跳跃、蛇转向</div><div class="arrow">vs</div><div>连续行走、瞄准、加速</div>
+</div>
+<pre><code># 事件：某次输入抵达时检查
+func _unhandled_input(event):
+    if event.is_action_pressed("pause_game"):
+        toggle_pause()
+
+# 轮询：每个物理帧检查当前状态
+func _physics_process(delta):
+    var axis := Input.get_axis("move_left", "move_right")
+    position.x += axis * speed * delta</code></pre>
+<p>蛇每次按键只排队一次方向，因此事件方式更合适。平台角色的连续移动通常使用轮询。</p>
+
+<h2>6. 为什么使用 _unhandled_input？</h2>
+<p>Godot 会按顺序分发输入，UI 控件有机会先消费事件。只有尚未被处理的事件才到 <code>_unhandled_input()</code>。这意味着以后添加文本框或菜单时，UI 可阻止游戏同时响应同一按键。</p>
+<div class="card"><strong>简化模型：</strong><code>_input</code> 较早看到事件；GUI 随后有机会处理；<code>_unhandled_input</code> 只看到剩余事件。游戏玩法控制通常适合后者，全局调试快捷键可能使用前者。</div>
+
+<h2>7. 验收</h2>
+<div class="card task">
+<ol>
+<li>方向键和 WASD 都能控制蛇。</li>
+<li>Space 与 P 都能暂停。</li>
+<li>Enter 与 R 都能在结束后重开。</li>
+<li>若有手柄，D-pad 与按钮映射也能工作。</li>
+<li>搜索 <code>KEY_</code>：<code>main.gd</code> 中应没有具体按键常量。</li>
+<li>打开 <code>project.godot</code>：应出现六个动作。</li>
+</ol>
+</div>
+
+<h2>8. 闭卷检索</h2>
+<details><summary>问题 1：增加手柄支持后，为什么不需要修改 main.gd？</summary><p>代码依赖语义动作而非设备事件；只需在 Input Map 中给现有动作添加手柄事件。</p></details>
+<details><summary>问题 2：蛇转向为何用事件，不用 is_action_pressed 持续轮询？</summary><p>转向是离散意图，每次按下只应排队一次；持续轮询更适合按住期间连续发生的运动。</p></details>
+<details><summary>问题 3：_unhandled_input 相比 _input 有什么意义？</summary><p>它只接收未被 UI 等较早阶段消费的事件，能避免操作界面时同时触发游戏玩法。</p></details>
+
+<h2>加一分挑战</h2>
+<p>在不修改 <code>main.gd</code> 的前提下，再为 <code>pause_game</code> 添加键盘 Escape。验证后思考：这是否证明了输入配置与玩法逻辑已经解耦？</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/tutorials/inputs/input_examples.html">Input examples</a> 的 <em>Events versus polling</em> 与 <em>InputMap</em> 两节。</p>
+
+<footer><a href="0005-custom-signals-and-hud.html">← 第五课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“Input Map 已接入”</strong>，并回答：<em>增加一个新的控制设备时，为什么通常不需要修改玩法代码？</em></footer>
+</main></body></html>

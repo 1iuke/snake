@@ -20,6 +20,10 @@
   官方场景资源与 `instantiate()` API 说明。用于动态创建可复用场景实例。
 - [Godot 4.7：使用信号](https://docs.godotengine.org/en/4.7/getting_started/step_by_step/signals.html)
   官方 Signal 入门与 Timer 示例。用于学习节点间的事件驱动协作。
+- [Godot 4.7：输入示例与 Input Map](https://docs.godotengine.org/en/4.7/tutorials/inputs/input_examples.html)
+  官方输入动作、事件与轮询说明。用于把设备按键映射为游戏语义动作。
+- [Godot 4.7：手柄支持](https://docs.godotengine.org/en/4.7/tutorials/inputs/controllers_gamepads_joysticks.html)
+  官方跨键盘与控制器输入指南。用于设计设备无关的控制方案。
 
 ## Wisdom (Communities)
 
