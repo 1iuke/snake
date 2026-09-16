@@ -4,7 +4,7 @@ const COLS := 20
 const ROWS := 20
 const CELL_SIZE := 30.0
 const BOARD_ORIGIN := Vector2(60, 140)
-const START_SPEED := 0.16
+@export_range(0.05, 0.50, 0.01) var start_speed  := 0.16
 const MIN_SPEED := 0.065
 
 var snake: Array[Vector2i] = []
@@ -14,7 +14,7 @@ var food := Vector2i.ZERO
 var score := 0
 var high_score := 0
 var move_timer := 0.0
-var move_interval := START_SPEED
+var move_interval := start_speed
 var game_over := false
 var paused := false
 
@@ -31,7 +31,7 @@ func new_game() -> void:
 	queued_direction = direction
 	score = 0
 	move_timer = 0.0
-	move_interval = START_SPEED
+	move_interval = start_speed
 	game_over = false
 	paused = false
 	spawn_food()
@@ -91,7 +91,7 @@ func step_game() -> void:
 	if ate_food:
 		score += 10
 		high_score = maxi(high_score, score)
-		move_interval = maxf(MIN_SPEED, START_SPEED - score * 0.0015)
+		move_interval = maxf(MIN_SPEED, start_speed - score * 0.0015)
 		spawn_food()
 	queue_redraw()
 
