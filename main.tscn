@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://b2lppb5ccf4ke"]
+
+[ext_resource type="Script" uid="uid://dkgqptcou4e1q" path="res://main.gd" id="1"]
+
+[node name="SnakeGame" type="Node2D" unique_id=2054477713]
+script = ExtResource("1")
