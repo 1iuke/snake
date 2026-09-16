@@ -16,8 +16,10 @@ var food_visual: Node2D
 
 var score := 0
 var high_score := 0
-var move_timer := 0.0
-var move_interval := start_speed
+#var move_timer := 0.0
+#var move_interval := start_speed
+@onready var move_timer: Timer = $MoveTimer
+
 var game_over := false
 var paused := false
 
@@ -26,7 +28,6 @@ func _ready() -> void:
 	randomize()
 	food_visual = FOOD_SCENE.instantiate()
 	add_child(food_visual)
-	set_process(true)
 	new_game()
 
 
@@ -35,21 +36,14 @@ func new_game() -> void:
 	direction = Vector2i.RIGHT
 	queued_direction = direction
 	score = 0
-	move_timer = 0.0
-	move_interval = start_speed
+	move_timer.start(start_speed)
 	game_over = false
 	paused = false
 	spawn_food()
 	queue_redraw()
 
 
-func _process(delta: float) -> void:
-	if game_over or paused:
-		return
-	move_timer += delta
-	if move_timer >= move_interval:
-		move_timer -= move_interval
-		step_game()
+
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -85,7 +79,9 @@ func step_game() -> void:
 	direction = queued_direction
 	var new_head := snake[0] + direction
 	var ate_food := new_head == food
-
+	move_timer.wait_time = maxf(
+			MIN_SPEED,
+			start_speed - score * 0.0015)
 	if not ate_food:
 		snake.pop_back()
 	if is_outside_board(new_head) or new_head in snake:
@@ -96,7 +92,7 @@ func step_game() -> void:
 	if ate_food:
 		score += 10
 		high_score = maxi(high_score, score)
-		move_interval = maxf(MIN_SPEED, start_speed - score * 0.0015)
+		
 		spawn_food()
 	queue_redraw()
 
@@ -125,6 +121,7 @@ func spawn_food() -> void:
 
 
 func finish_game() -> void:
+	move_timer.stop()
 	game_over = true
 	high_score = maxi(high_score, score)
 	queue_redraw()
@@ -189,3 +186,8 @@ func draw_overlay() -> void:
 	var hint := "SPACE TO CONTINUE" if paused else "ENTER / R TO RESTART"
 	draw_string(ThemeDB.fallback_font, Vector2(0, 410), title, HORIZONTAL_ALIGNMENT_CENTER, 720, 42, Color("eaf7ef"))
 	draw_string(ThemeDB.fallback_font, Vector2(0, 455), hint, HORIZONTAL_ALIGNMENT_CENTER, 720, 19, Color("75e6a4"))
+
+
+func _on_move_timer_timeout() -> void:
+	if not game_over and not paused:
+		step_game()

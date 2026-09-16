@@ -1,0 +1,99 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第四课：用 Timer Signal 驱动蛇</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 04 · 约 25 分钟</p>
+<h1>用 Timer Signal 驱动蛇</h1>
+<p class="lead">这一课的胜利条件：删除手写的逐帧计时器，改用 <code>Timer.timeout</code> 信号触发蛇移动，并能说清“发出者是否需要知道接收者”。</p>
+
+<h2>1. 当前代码在轮询</h2>
+<pre><code>func _process(delta: float) -&gt; void:
+    move_timer += delta
+    if move_timer &gt;= move_interval:
+        move_timer -= move_interval
+        step_game()</code></pre>
+<p>这段代码每个渲染帧都被调用，只为判断“时间到了没有”。它能工作，但 Godot 已经提供专门负责倒计时的 <code>Timer</code> 节点。Timer 到时会发出 <code>timeout</code> 信号。</p>
+
+<h2>2. Signal 的三个角色</h2>
+<div class="map">
+<div><strong>Emitter</strong></div><div class="arrow">Signal</div><div><strong>Callable</strong></div>
+<div>Timer</div><div class="arrow">timeout</div><div>_on_move_timer_timeout</div>
+<div>只宣布“到时间了”</div><div class="arrow">→</div><div>决定如何响应</div>
+</div>
+<p>关键价值是解耦：Timer 不需要知道蛇、方向或棋盘，只负责发出事件。接收方把一个可调用函数连接到信号。</p>
+
+<h2>3. 添加 MoveTimer 节点</h2>
+<div class="card task">
+<ol>
+<li>打开 <code>main.tscn</code>，选中根节点 <code>SnakeGame</code>。</li>
+<li>点击添加子节点，搜索 <code>Timer</code>。</li>
+<li>将节点命名为 <code>MoveTimer</code>。</li>
+<li>保持 <strong>One Shot</strong> 关闭、<strong>Autostart</strong> 关闭。</li>
+<li>切换右侧 <strong>Signals</strong> 标签，双击 <code>timeout()</code>。</li>
+<li>接收节点选择 <code>SnakeGame</code>，方法保持 <code>_on_move_timer_timeout</code>，点击 Connect。</li>
+</ol>
+</div>
+<p>连接会被保存到 <code>main.tscn</code>；编辑器会在 <code>main.gd</code> 生成回调函数。函数左侧的连接图标可以反查连接来源。</p>
+
+<h2>4. 用 @onready 获取子节点</h2>
+<p>找到现有的：</p>
+<pre><code>var move_timer := 0.0
+var move_interval := start_speed</code></pre>
+<p>删除这两行，换成：</p>
+<pre><code>@onready var move_timer: Timer = $MoveTimer</code></pre>
+<p><code>$MoveTimer</code> 是 <code>get_node("MoveTimer")</code> 的简写；<code>@onready</code> 把赋值推迟到节点进入 SceneTree、子节点可用之后。</p>
+
+<h2>5. 让 Timer 接管节拍</h2>
+<h3>① 删除逐帧轮询</h3>
+<p>完整删除 <code>_process(delta)</code> 函数；在 <code>_ready()</code> 中删除不再需要的 <code>set_process(true)</code>。</p>
+
+<h3>② 新游戏时启动</h3>
+<p>在 <code>new_game()</code> 中删除原来的两行：</p>
+<pre><code>move_timer = 0.0
+move_interval = start_speed</code></pre>
+<p>换成：</p>
+<pre><code>move_timer.start(start_speed)</code></pre>
+
+<h3>③ 响应 timeout</h3>
+<p>把编辑器生成的回调改为：</p>
+<pre><code>func _on_move_timer_timeout() -&gt; void:
+    if not game_over and not paused:
+        step_game()</code></pre>
+
+<h3>④ 吃食物后加速</h3>
+<p>在 <code>step_game()</code> 中找到计算 <code>move_interval</code> 的那一行，替换为：</p>
+<pre><code>move_timer.wait_time = maxf(
+    MIN_SPEED,
+    start_speed - score * 0.0015
+)</code></pre>
+
+<h3>⑤ 游戏结束时停止</h3>
+<p>在 <code>finish_game()</code> 的第一行加入：</p>
+<pre><code>move_timer.stop()</code></pre>
+
+<h2>6. 验收</h2>
+<div class="card task">
+<ol>
+<li>运行项目：蛇应按原来的速度移动。</li>
+<li>吃到食物：速度仍会逐渐增加。</li>
+<li>按空格：暂停期间蛇不移动；恢复后继续。</li>
+<li>撞墙：Timer 停止；按 R 后 Timer 重新启动。</li>
+<li>搜索 <code>_process</code>：主脚本中应不存在这个函数。</li>
+</ol>
+</div>
+
+<h2>7. 编辑器连接与代码连接</h2>
+<pre><code># 编辑器连接：记录在 main.tscn 中
+[connection signal="timeout" from="MoveTimer" to="." method="_on_move_timer_timeout"]
+
+# 等价的代码连接：适合运行时创建的节点
+move_timer.timeout.connect(_on_move_timer_timeout)</code></pre>
+<p>本课用编辑器连接，是为了让你在 Signals 面板和场景文件中都看到关系。上一课的 Food 是运行时创建的；若 Food 需要连接信号，通常在实例化后用代码连接。</p>
+
+<h2>8. 闭卷检索</h2>
+<details><summary>问题 1：Timer 如何知道该调用 step_game()？</summary><p>它不知道。Timer 只发出 <code>timeout</code>；场景中保存的 signal connection 把该事件连接到主脚本回调，回调再调用 <code>step_game()</code>。</p></details>
+<details><summary>问题 2：为什么 $MoveTimer 要搭配 @onready？</summary><p>脚本初始化早期，子节点可能尚不可用；<code>@onready</code> 在节点准备完成后获取 SceneTree 中的子节点。</p></details>
+<details><summary>问题 3：Signal 相比直接调用的主要价值是什么？</summary><p>发出者无需持有或了解接收者，多个接收者也能独立响应，从而减少对象之间的耦合。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/getting_started/step_by_step/signals.html">Using signals</a> 中的开头、<em>Connecting a signal in the editor</em> 和 <em>Connecting a signal via code</em>。</p>
+
+<footer><a href="0003-instantiate-food-scene.html">← 第三课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“Timer 已接管移动”</strong>，并回答：<em>Timer 是否知道谁接收了 timeout？为什么？</em> 遇到错误请发调试器文本或截图。</footer>
+</main></body></html>

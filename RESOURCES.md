@@ -18,6 +18,8 @@
   官方解释脚本与场景如何共同构成可复用对象。用于理解代码和场景各自的职责。
 - [Godot 4.7：PackedScene 类](https://docs.godotengine.org/en/4.7/classes/class_packedscene.html)
   官方场景资源与 `instantiate()` API 说明。用于动态创建可复用场景实例。
+- [Godot 4.7：使用信号](https://docs.godotengine.org/en/4.7/getting_started/step_by_step/signals.html)
+  官方 Signal 入门与 Timer 示例。用于学习节点间的事件驱动协作。
 
 ## Wisdom (Communities)
 

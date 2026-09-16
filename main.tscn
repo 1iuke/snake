@@ -3,5 +3,11 @@
 [ext_resource type="Script" uid="uid://dkgqptcou4e1q" path="res://main.gd" id="1"]
 
 [node name="SnakeGame" type="Node2D" unique_id=2054477713]
+rotation = -0.0011362133
 script = ExtResource("1")
 start_speed = 0.08
+
+[node name="MoveTimer" type="Timer" parent="." unique_id=557227788]
+autostart = true
+
+[connection signal="timeout" from="MoveTimer" to="." method="_on_move_timer_timeout"]
