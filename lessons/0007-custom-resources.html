@@ -1,0 +1,116 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第七课：用 Resource 管理游戏规则</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 07 · 约 30 分钟</p>
+<h1>把游戏规则变成 Resource</h1>
+<p class="lead">这一课的胜利条件：创建 <code>GameRules</code> 自定义 Resource，把速度和得分规则保存为 <code>default_rules.tres</code>，主场景通过 Inspector 引用它。</p>
+
+<h2>1. Node 与 Resource 的分工</h2>
+<div class="map">
+<div><strong>Node</strong></div><div></div><div><strong>Resource</strong></div>
+<div>有生命周期、进入 SceneTree</div><div class="arrow">vs</div><div>保存数据、由节点使用</div>
+<div>处理、绘制、物理、输入</div><div class="arrow">vs</div><div>配置、素材、共享定义</div>
+<div>例：SnakeGame、Timer</div><div class="arrow">vs</div><div>例：Texture、Audio、GameRules</div>
+</div>
+<p>对 Unity 开发者而言，自定义 Resource 最接近 <code>ScriptableObject</code>：它是 Inspector 可编辑、可保存、可被多个对象引用的数据资产。</p>
+
+<h2>2. 定义 GameRules 类型</h2>
+<p>在 Script 工作区创建 <code>res://game_rules.gd</code>：</p>
+<pre><code>class_name GameRules
+extends Resource
+
+@export_group("Scoring")
+@export_range(1, 100, 1) var score_per_food := 10
+
+@export_group("Speed")
+@export_range(0.05, 0.50, 0.01) var start_speed := 0.16
+@export_range(0.03, 0.20, 0.005) var min_speed := 0.065
+@export_range(0.0001, 0.01, 0.0001) var speed_up_per_point := 0.0015</code></pre>
+<p><code>class_name GameRules</code> 把脚本注册为全局类型，因此它会出现在创建 Resource 的窗口，也能用于静态类型标注。</p>
+
+<h2>3. 创建 .tres 数据资产</h2>
+<div class="card task">
+<ol>
+<li>等待编辑器完成脚本扫描，确认没有解析错误。</li>
+<li>在 FileSystem 面板空白处右键，选择 <strong>New → Resource</strong>。</li>
+<li>搜索 <code>GameRules</code> 并创建。</li>
+<li>保存为 <code>res://default_rules.tres</code>。</li>
+<li>双击它，在 Inspector 中观察 Scoring 和 Speed 分组。</li>
+</ol>
+</div>
+<p>打开文本文件会看到类似：</p>
+<pre><code>[gd_resource type="Resource" script_class="GameRules" ...]
+
+[resource]
+script = ExtResource("1")
+score_per_food = 10
+start_speed = 0.16</code></pre>
+<p>`.tres` 是文本 Resource，适合版本控制；Godot 自动处理序列化，无需编写 JSON 读写代码。</p>
+
+<h2>4. 让主场景引用规则</h2>
+<p>在 <code>main.gd</code> 中删除：</p>
+<pre><code>@export_range(0.05, 0.50, 0.01) var start_speed := 0.16
+const MIN_SPEED := 0.065</code></pre>
+<p>换成：</p>
+<pre><code>@export var rules: GameRules</code></pre>
+<p>保存脚本，回到 <code>main.tscn</code>：</p>
+<ol>
+<li>选中 <code>SnakeGame</code>。</li>
+<li>Inspector 中会出现 <strong>Rules</strong> 属性。</li>
+<li>把 <code>default_rules.tres</code> 从 FileSystem 拖入 Rules。</li>
+<li>保存场景。</li>
+</ol>
+<div class="card"><strong>先赋值再运行：</strong>未指定 Resource 时 <code>rules == null</code>，访问 <code>rules.start_speed</code> 会报错。这种明确依赖比悄悄使用错误配置更容易发现。</div>
+
+<h2>5. 用 Resource 替换硬编码</h2>
+<p>在 <code>new_game()</code> 中：</p>
+<pre><code>move_timer.start(rules.start_speed)</code></pre>
+<p>在 <code>step_game()</code> 的 <code>if ate_food:</code> 中：</p>
+<pre><code>score += rules.score_per_food
+high_score = maxi(high_score, score)
+score_changed.emit(score, high_score)
+move_timer.wait_time = maxf(
+    rules.min_speed,
+    rules.start_speed - score * rules.speed_up_per_point
+)</code></pre>
+<p>搜索并确认 <code>main.gd</code> 中不再出现独立的 <code>start_speed</code>、<code>MIN_SPEED</code> 或 <code>score += 10</code>。</p>
+
+<h2>6. 创建第二套规则</h2>
+<div class="card task">
+<ol>
+<li>复制 <code>default_rules.tres</code>，命名为 <code>fast_rules.tres</code>。</li>
+<li>设为：Start Speed <code>0.10</code>、Min Speed <code>0.04</code>、Score Per Food <code>25</code>。</li>
+<li>把主场景的 Rules 从默认版换成快速版并运行。</li>
+<li>确认玩法变化后切回 <code>default_rules.tres</code>。</li>
+</ol>
+</div>
+<p>代码没有变化，但同一玩法获得两套数据配置。这正是数据驱动设计最小而完整的例子。</p>
+
+<h2>7. Resource 的共享语义</h2>
+<p>同一路径的 Resource 通常只加载一次，多个节点可能持有同一个对象引用。因此：</p>
+<pre><code># 谨慎：可能修改所有引用者看到的共享配置
+rules.score_per_food = 999
+
+# 需要运行时私有副本时
+var runtime_rules := rules.duplicate() as GameRules</code></pre>
+<p>配置 Resource 通常应当“读多写少”。玩家当前分数属于运行时状态，不应该放进共享的 GameRules。</p>
+
+<h2>8. 验收</h2>
+<div class="card task">
+<ol>
+<li>项目启动无 <code>null instance</code> 错误。</li>
+<li>默认规则下，每个食物仍增加 10 分。</li>
+<li>切换快速规则后，不改代码即可改变速度和得分。</li>
+<li><code>main.tscn</code> 保存了对 <code>default_rules.tres</code> 的引用。</li>
+<li>Remote Inspector 中可看到主节点引用的 GameRules。</li>
+</ol>
+</div>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>问题 1：GameRules 为什么是 Resource，不是 Node？</summary><p>它只表达可序列化配置，不需要进入 SceneTree、接收生命周期或处理绘制；实际行为由使用这些数据的节点负责。</p></details>
+<details><summary>问题 2：.tres 相比手写 JSON 有什么直接优势？</summary><p>它保留 Godot 类型，自动序列化，并原生支持 Inspector、资源引用和版本控制，不必自行解析与校验字段。</p></details>
+<details><summary>问题 3：为什么不把当前 score 放进 GameRules？</summary><p>GameRules 是可共享的静态规则；score 是每局独立变化的运行时状态，混入后会造成职责和共享语义混乱。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读官方 <a href="https://docs.godotengine.org/en/stable/tutorials/scripting/resources.html">Resources</a> 的 <em>Nodes and resources</em> 与 <em>Creating your own resources</em> 两节。</p>
+
+<footer><a href="0006-input-map.html">← 第六课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“GameRules 已接入”</strong>，并回答：<em>为什么当前 score 不适合放进共享的 GameRules？</em></footer>
+</main></body></html>

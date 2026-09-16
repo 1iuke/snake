@@ -2,10 +2,11 @@
 
 [ext_resource type="Script" uid="uid://dkgqptcou4e1q" path="res://main.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ok7xv2xv4a8a" path="res://hud.tscn" id="2_0xm2m"]
+[ext_resource type="Resource" uid="uid://r4ip8hlbona8" path="res://fast_rules.tres" id="2_h2yge"]
 
 [node name="SnakeGame" type="Node2D" unique_id=2054477713]
 script = ExtResource("1")
-start_speed = 0.08
+rules = ExtResource("2_h2yge")
 
 [node name="MoveTimer" type="Timer" parent="." unique_id=557227788]
 

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="GameRules" format=3 uid="uid://r4ip8hlbona8"]
+
+[ext_resource type="Script" uid="uid://bud6r00dllywk" path="res://game_rules.gd" id="1_0vi2w"]
+
+[resource]
+script = ExtResource("1_0vi2w")
+score_per_food = 25
+start_speed = 0.1
+min_speed = 0.04
+metadata/_custom_type_script = "uid://bud6r00dllywk"

@@ -24,6 +24,8 @@
   官方输入动作、事件与轮询说明。用于把设备按键映射为游戏语义动作。
 - [Godot 4.7：手柄支持](https://docs.godotengine.org/en/4.7/tutorials/inputs/controllers_gamepads_joysticks.html)
   官方跨键盘与控制器输入指南。用于设计设备无关的控制方案。
+- [Godot：Resources](https://docs.godotengine.org/en/stable/tutorials/scripting/resources.html)
+  官方 Resource、序列化和自定义数据资产说明。用于创建 Inspector 可编辑的 `.tres` 配置。
 
 ## Wisdom (Communities)
 
