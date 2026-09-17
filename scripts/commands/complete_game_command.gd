@@ -6,6 +6,6 @@ func _init(value: int) -> void:
 	final_score = value
 
 func execute() -> void:
-	var model := get_model(ProgressModel.NAME) as ProgressModel
-	assert(model != null, "ProgressModel is not registered")
-	model.record_completed_game(final_score)
+	var system := get_system(ProgressSystem.NAME) as ProgressSystem
+	assert(system != null, "ProgressSystem is not registered")
+	system.complete_game(final_score)

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第二十二课：QFramework System</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 07 · v0.4.1 · 约 30 分钟</p>
+<h1>让 System 协调业务流程</h1>
+<p class="lead">本课的胜利条件：<code>ProgressModel</code> 不再直接依赖存储层；<code>ProgressSystem</code> 协调 Model 与 StorageUtility，完成加载和一局结算。</p>
+
+<h2>1. 为什么现在值得引入 System</h2>
+<p><code>ProgressModel.record_completed_game()</code> 当前同时承担：</p>
+<ul>
+<li>更新最高分与局数；</li>
+<li>把字段映射到存档键；</li>
+<li>调用 Utility 写盘；</li>
+<li>处理错误并发布事件。</li>
+</ul>
+<p>这已经不是单纯的数据所有权，而是一段跨 Model 与 Utility 的业务流程。System 的价值是集中这类规则，而不是替代所有函数。</p>
+
+<h2>2. 创建 ProgressSystem</h2>
+<div class="card task"><ol>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd> 打开 QFramework 面板。</li>
+<li>选择 <strong>创建 System</strong>。</li>
+<li>名称输入 <code>Progress</code>，确认生成 <code>ProgressSystem</code>。</li>
+<li>点击创建。</li>
+</ol></div>
+<p>修改生成的 <code>scripts/systems/progress_system.gd</code>：</p>
+<pre><code>class_name ProgressSystem extends AbstractSystem
+
+const NAME: String = "ProgressSystem"
+const SCORE_SECTION := "scores"
+const HIGH_SCORE_KEY := "high_score"
+const STATS_SECTION := "stats"
+const GAMES_PLAYED_KEY := "games_played"
+
+var _model: ProgressModel
+var _storage: StorageUtility
+
+func get_system_name() -&gt; String:
+    return NAME
+
+func init() -&gt; void:
+    _model = get_model(ProgressModel.NAME) as ProgressModel
+    _storage = get_utility(StorageUtility.NAME) as StorageUtility
+    assert(_model != null, "ProgressModel is not registered")
+    assert(_storage != null, "StorageUtility is not registered")
+
+    _model.high_score = maxi(
+        0,
+        _storage.load_int(SCORE_SECTION, HIGH_SCORE_KEY)
+    )
+    _model.games_played = maxi(
+        0,
+        _storage.load_int(STATS_SECTION, GAMES_PLAYED_KEY)
+    )
+
+func complete_game(final_score: int) -&gt; void:
+    _model.update_high_score(final_score)
+    _model.games_played += 1
+    _storage.set_int(SCORE_SECTION, HIGH_SCORE_KEY, _model.high_score)
+    _storage.set_int(STATS_SECTION, GAMES_PLAYED_KEY, _model.games_played)
+
+    var error := _storage.flush()
+    if error != OK:
+        push_error("Could not save progress: %s" % error_string(error))
+        return
+
+    _model.progress_saved.trigger()</code></pre>
+
+<h2>3. 把 ProgressModel 缩回状态所有者</h2>
+<p>从 <code>ProgressModel</code> 删除：</p>
+<ul>
+<li>四个存档 section/key 常量；</li>
+<li><code>_storage</code> 字段；</li>
+<li><code>init()</code> 中的加载代码；</li>
+<li>整个 <code>record_completed_game()</code>。</li>
+</ul>
+<p>最终保留：</p>
+<pre><code>class_name ProgressModel extends AbstractModel
+
+const NAME: String = "ProgressModel"
+
+var high_score := 0
+var games_played := 0
+var progress_saved := EasyEvent.new()
+
+func get_model_name() -&gt; String:
+    return NAME
+
+func init() -&gt; void:
+    pass
+
+func update_high_score(candidate: int) -&gt; void:
+    high_score = maxi(high_score, candidate)</code></pre>
+
+<h2>4. 注册 System</h2>
+<p>修改 <code>snake_app.gd</code>：</p>
+<pre><code>func init() -&gt; void:
+    register_utility(StorageUtility.new())
+    register_model(ProgressModel.new())
+    register_system(ProgressSystem.new())</code></pre>
+<p>QFramework 随后按 Utility → Model → System 初始化，所以 System 可以安全取得前两层。</p>
+
+<h2>5. Command 改为调用 System</h2>
+<p>修改 <code>CompleteGameCommand.execute()</code>：</p>
+<pre><code>func execute() -&gt; void:
+    var system := get_system(ProgressSystem.NAME) as ProgressSystem
+    assert(system != null, "ProgressSystem is not registered")
+    system.complete_game(final_score)</code></pre>
+<p>Controller 无需变化，仍然发送同一个 Command。调用路径变为：</p>
+<pre><code>Controller
+  → CompleteGameCommand
+  → ProgressSystem
+  → ProgressModel + StorageUtility
+  → progress_saved Event</code></pre>
+
+<h2>6. 验证 Remote 树与行为</h2>
+<div class="card task"><ol>
+<li>运行后展开 <code>SnakeApp → System</code>，确认存在 <code>ProgressSystem</code>。</li>
+<li>确认启动时旧最高分与局数被加载。</li>
+<li>完成一局，确认局数只增加一次、事件只触发一次。</li>
+<li>重启游戏，确认进度仍然存在。</li>
+<li>搜索 <code>get_utility</code>：业务脚本中应由 ProgressSystem 使用，ProgressModel 不再使用。</li>
+<li>搜索 <code>record_completed_game</code>：应为零个结果。</li>
+</ol></div>
+
+<h2>7. System 不是什么</h2>
+<ul>
+<li>不是所有节点都要访问的“万能 Manager”。</li>
+<li>不负责直接操作 HUD、Timer 或场景节点。</li>
+<li>不保存本应属于 Model 的长期业务状态。</li>
+<li>不包装只有一行且没有业务规则的局部函数。</li>
+</ul>
+<p>System 的判断标准是：是否存在需要集中维护、可能由多个用例复用的业务规则或跨层流程。</p>
+
+<h2>8. 闭卷检索</h2>
+<details><summary>为什么 ProgressSystem 能在 init() 中取得 Model 和 Utility？</summary><p>Architecture 完成登记后按 Utility → Model → System 的顺序初始化，System 最后执行。</p></details>
+<details><summary>为什么存档键从 Model 移到了 System？</summary><p>键映射属于进度持久化流程的协调细节；Model 只需拥有业务状态，不必知道如何映射到外部存储。</p></details>
+<details><summary>为什么 main.gd 不直接调用 ProgressSystem？</summary><p>Controller 发送 Command 表达写入意图，Command 再协调 System，使交互入口保持统一且可复用。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/09.%20引入%20System.md">引入 System</a>，并对照 <a href="../addons/qframework/framework/architecture/abstract_system.gd">AbstractSystem</a> 与 Architecture 的初始化顺序。</p>
+
+<footer><a href="0021-qframework-query.html">← 第二十一课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“进度流程已归 System”</strong>，并回答：<em>System 与万能 Manager 的关键区别是什么？</em><br><br>如果启动时读不到旧存档，请检查注册顺序、Remote 三层节点和首个错误。</footer>
+</main></body></html>
