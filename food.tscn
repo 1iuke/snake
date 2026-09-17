@@ -2,5 +2,47 @@
 
 [ext_resource type="Script" uid="uid://3mxp20aegpyg" path="res://food.gd" id="1_8txok"]
 
+[sub_resource type="Animation" id="Animation_8txok"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:scale")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector2(1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_pohk7"]
+resource_name = "pulse"
+length = 0.9
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:scale")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.45, 0.9),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector2(1, 1), Vector2(1.15, 1.15), Vector2(1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_q6vj8"]
+_data = {
+&"RESET": SubResource("Animation_8txok"),
+&"pulse": SubResource("Animation_pohk7")
+}
+
 [node name="Food" type="Node2D" unique_id=805697218]
 script = ExtResource("1_8txok")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=737517652]
+libraries/ = SubResource("AnimationLibrary_q6vj8")
+autoplay = &"pulse"

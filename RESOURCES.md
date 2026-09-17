@@ -34,6 +34,10 @@
   官方持久化、序列化和读写示例。用于理解应保存哪些运行时状态。
 - [Godot：File system 与 user://](https://docs.godotengine.org/en/stable/tutorials/scripting/filesystem.html)
   官方项目资源路径与用户数据路径说明。用于区分只读游戏资源和可写用户存档。
+- [Godot 4.7：动画功能介绍](https://docs.godotengine.org/en/4.7/tutorials/animation/introduction.html)
+  官方 AnimationPlayer、轨道与关键帧教程。用于制作可视化编辑和循环播放的动画。
+- [Godot 4.7：Tween](https://docs.godotengine.org/en/4.7/classes/class_tween.html)
+  官方代码补间与生命周期说明。用于制作由运行时事件触发的一次性反馈动画。
 
 ## Wisdom (Communities)
 

@@ -1,5 +1,6 @@
 extends Node2D
 signal score_changed(new_score: int, new_high_score: int)
+@onready var eat_sound: AudioStreamPlayer2D = $EatSound
 
 const COLS := 20
 const ROWS := 20
@@ -112,6 +113,7 @@ func step_game() -> void:
 
 	snake.push_front(new_head)
 	if ate_food:
+		eat_sound.play()
 		score += rules.score_per_food
 		high_score = maxi(high_score, score)
 		score_changed.emit(score, high_score)

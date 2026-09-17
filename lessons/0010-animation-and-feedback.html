@@ -1,0 +1,111 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十课：动画与即时反馈</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 10 · 约 35 分钟</p>
+<h1>让游戏对玩家作出回应</h1>
+<p class="lead">这一课的胜利条件：Food 使用 AnimationPlayer 循环呼吸，ScoreLabel 使用 Tween 在得分时弹跳，并理解什么时候选择哪一种动画工具。</p>
+
+<h2>1. 两种动画工具，两类问题</h2>
+<div class="map">
+<div><strong>AnimationPlayer</strong></div><div></div><div><strong>Tween</strong></div>
+<div>编辑器时间轴与关键帧</div><div class="arrow">vs</div><div>代码创建起点、终点与时长</div>
+<div>可反复预览和复用</div><div class="arrow">vs</div><div>动态目标和一次性反馈</div>
+<div>呼吸、角色动作、过场</div><div class="arrow">vs</div><div>数值弹跳、淡入、移动到动态位置</div>
+</div>
+<p>二者都会插值属性。选择标准不是“哪个更高级”，而是动画数据更适合由时间轴编辑，还是由运行时上下文决定。</p>
+
+<h2>2. 用 AnimationPlayer 制作 Food 呼吸</h2>
+<div class="card task">
+<ol>
+<li>打开 <code>food.tscn</code>。</li>
+<li>选中根节点 Food，添加子节点 <code>AnimationPlayer</code>。</li>
+<li>选中 AnimationPlayer，底部动画面板中新建动画，命名 <code>pulse</code>。</li>
+<li>动画长度设为 <code>0.9</code> 秒，并启用循环。</li>
+</ol>
+</div>
+
+<h3>插入 Scale 关键帧</h3>
+<ol>
+<li>将时间线移到 <code>0.0</code>，选中 Food，把 Scale 设为 <code>(1, 1)</code>，点击 Scale 旁的钥匙插入关键帧。</li>
+<li>移到 <code>0.45</code>，把 Scale 设为 <code>(1.15, 1.15)</code>，插入关键帧。</li>
+<li>移到 <code>0.9</code>，恢复 Scale <code>(1, 1)</code>，插入关键帧。</li>
+<li>在 AnimationPlayer 的动画列表中把 <code>pulse</code> 设为 Autoplay。</li>
+</ol>
+<p>运行游戏后，食物应围绕自身原点持续缩放。由于 <code>food.gd</code> 把圆心画在 <code>Vector2.ZERO</code>，缩放中心天然正确。</p>
+<div class="card"><strong>常见错误：</strong>AnimationPlayer 应是 Food 的子节点，不要把 Food 放在 AnimationPlayer 下。AnimationPlayer 继承 Node，没有 2D Transform，不应充当变换层级的中间节点。</div>
+
+<h2>3. 用 Tween 制作分数弹跳</h2>
+<p>在 <code>hud.gd</code> 的成员区域加入：</p>
+<pre><code>var score_tween: Tween</code></pre>
+<p>把分数回调扩展为：</p>
+<pre><code>func _on_snake_game_score_changed(
+    new_score: int,
+    new_high_score: int
+) -&gt; void:
+    score_label.text = "SCORE  %04d" % new_score
+    best_label.text = "BEST  %04d" % new_high_score
+
+    if score_tween:
+        score_tween.kill()
+
+    score_label.pivot_offset = score_label.size / 2.0
+    score_label.scale = Vector2.ONE
+    score_tween = create_tween()
+    score_tween.tween_property(
+        score_label,
+        "scale",
+        Vector2(1.25, 1.25),
+        0.08
+    ).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    score_tween.tween_property(
+        score_label,
+        "scale",
+        Vector2.ONE,
+        0.18
+    ).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)</code></pre>
+
+<h2>4. 为什么先 kill 旧 Tween？</h2>
+<p>如果玩家连续快速得分，前一次动画可能尚未结束。多个 Tween 同时写同一个 <code>scale</code> 属性时，结果会互相竞争。保存引用并在重启动画前 <code>kill()</code>，可以确保一次只有一个作者控制该属性。</p>
+<div class="card"><strong>Tween 生命周期：</strong>不要用 <code>Tween.new()</code>，那样得到的 Tween 无效。使用节点的 <code>create_tween()</code>；Tween 不能可靠复用，每次播放都新建一个。</div>
+
+<h2>5. 区分布局尺寸与视觉缩放</h2>
+<p>ScoreLabel 是 HBoxContainer 的子节点。Container 根据 Label 的最小尺寸安排布局；Tween 改的是 CanvasItem 的视觉 <code>scale</code>，不会要求 Container 重新分配整行空间，因此适合短促反馈。</p>
+<p><code>pivot_offset</code> 设在 Label 中心，否则缩放会从左上角发生，看起来像文字向右下方跳动。</p>
+
+<h2>6. 可选：接入吃食物音效</h2>
+<p>准备一个很短的、允许用于项目的 <code>.wav</code> 或 <code>.ogg</code> 文件，放入项目，例如 <code>res://audio/eat.wav</code>。然后：</p>
+<ol>
+<li>在 <code>main.tscn</code> 根节点下添加 <code>AudioStreamPlayer</code>，命名 <code>EatSound</code>。</li>
+<li>把音频文件拖入它的 Stream 属性。</li>
+<li>在 <code>main.gd</code> 加入：</li>
+</ol>
+<pre><code>@onready var eat_sound: AudioStreamPlayer = $EatSound</code></pre>
+<p>在 <code>if ate_food:</code> 内加入：</p>
+<pre><code>eat_sound.play()</code></pre>
+<p>UI 和全局反馈使用 <code>AudioStreamPlayer</code>；需要随空间距离与声像变化时，2D 游戏使用 <code>AudioStreamPlayer2D</code>。</p>
+
+<h2>7. 验收</h2>
+<div class="card task">
+<ol>
+<li>Food 出现后持续平滑呼吸，移动到新网格时动画不中断。</li>
+<li>ScoreLabel 每次得分先放大再回到 1 倍。</li>
+<li>快速触发多次分数更新时，Label 最终稳定回到 <code>Vector2.ONE</code>。</li>
+<li>暂停游戏时观察动画行为，并决定视觉反馈是否应该随游戏暂停。</li>
+<li>若完成音效分支，吃食物时只播放一次且没有明显延迟。</li>
+</ol>
+</div>
+
+<h2>8. 暂停语义</h2>
+<p>当前“暂停”只是业务变量 <code>paused</code>，并没有暂停整个 SceneTree。因此 AnimationPlayer 和 Tween 仍会运行。这不是引擎错误，而是产品决策。下一课会建立明确的游戏状态管理，再决定哪些节点随暂停停止。</p>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>问题 1：Food 呼吸为什么适合 AnimationPlayer？</summary><p>它是固定、循环、需要可视化预览和反复复用的时间轴动画，关键帧比运行时代码更易编辑。</p></details>
+<details><summary>问题 2：分数弹跳为什么适合 Tween？</summary><p>它由运行时得分事件即时触发，目标属性和中断行为由代码上下文决定，不需要持久时间轴。</p></details>
+<details><summary>问题 3：为什么重播前要 kill 旧 Tween？</summary><p>避免多个 Tween 同时写同一属性并互相竞争，确保动画结束后状态确定。</p></details>
+
+<h2>加一分挑战</h2>
+<p>让 BestLabel 仅在创造新纪录时变成黄色并弹跳。你需要在 HUD 保存上一次最高分，比较 <code>new_high_score</code> 是否真正增加。注意：这是 HUD 自己的显示历史，不是全局游戏存档状态。</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 4.7 官方 <a href="https://docs.godotengine.org/en/4.7/tutorials/animation/introduction.html">Introduction to the animation features</a> 的 AnimationPlayer、关键帧与轨道部分，并阅读 <a href="https://docs.godotengine.org/en/4.7/classes/class_tween.html">Tween</a> 开头的选择建议与生命周期说明。</p>
+
+<footer><a href="0009-persist-high-score.html">← 第九课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“动画反馈已完成”</strong>，并回答：<em>固定循环的 Food 呼吸与事件触发的分数弹跳，为什么分别选择 AnimationPlayer 和 Tween？</em></footer>
+</main></body></html>
