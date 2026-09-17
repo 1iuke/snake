@@ -139,7 +139,7 @@ func step_game() -> void:
 	if ate_food:
 		eat_sound.play()
 		score += rules.score_per_food
-		#progress_model.high_score = maxi(progress_model.high_score, score)
+		progress_model.high_score = maxi(progress_model.high_score, score)
 		score_changed.emit(score, progress_model.high_score)
 		move_timer.wait_time = maxf(
 			rules.min_speed,
