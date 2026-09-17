@@ -2,6 +2,19 @@
 
 ## Knowledge
 
+### 当前项目的一手资料
+
+- [QFramework v0.4.1 本地文档](addons/qframework/doc/01.%20概述.md)
+  与当前项目安装版本完全一致。用于确认 Architecture、Model、System、Utility、Command、Query、Event、EasyFSM 和 BindableProperty 的实际用法。
+- [QFramework Architecture 源码](addons/qframework/framework/architecture/architecture.gd)
+  当前版本最可靠的生命周期与 API 依据。用于确认注册、初始化顺序以及 `send_command()`、`send_query()` 的行为。
+- [QFramework EasyEvent 源码](addons/qframework/framework/corekit/easy_event/scripts/event.gd)
+  用于确认事件参数、注册、触发和注销语义；相关 BindableProperty 与 UnRegister 源码位于同一目录。
+- [QFramework 官方 GitHub](https://github.com/liangxiegame/QFramework)
+  作者维护的上游仓库，涵盖 Godot 与 Unity 版本。用于了解设计规范与更新；具体 API 仍以项目内 v0.4.1 源码为准。
+
+### Godot 官方文档
+
 - [Godot 4.7：核心概念概览](https://docs.godotengine.org/en/4.7/getting_started/introduction/key_concepts_overview.html)
   官方介绍 Node、Scene、SceneTree 和 Signal。用于建立 Godot 的核心心智模型。
 - [Godot 4.7：循序渐进教程](https://docs.godotengine.org/en/4.7/getting_started/step_by_step/index.html)
@@ -42,6 +55,12 @@
   官方 SceneTree 暂停和节点处理模式说明。用于区分业务状态与引擎级暂停。
 - [Godot：GDScript enum 与 match](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html)
   官方枚举与模式匹配语法。用于表达互斥游戏状态和集中状态转换。
+- [Godot 4.7：使用 SceneTree](https://docs.godotengine.org/en/4.7/tutorials/scripting/scene_tree.html)
+  官方运行时节点树、进入/退出顺序与场景切换说明。用于理解 Autoload、当前场景与 QFramework Architecture 的底层关系。
+- [Godot 4.7：调试工具](https://docs.godotengine.org/en/4.7/tutorials/scripting/debug/index.html)
+  官方 Output、Debugger、Profiler 与性能监视入口。用于从可复现证据定位脚本和运行时问题。
+- [Godot 4.7：导出项目](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html)
+  官方 Export Templates、预设、Release 构建与命令行导出说明。用于生成和验证可分发版本。
 
 ## Wisdom (Communities)
 
@@ -49,3 +68,10 @@
   适合提交可复现问题、搜索引擎版本相关经验和接受项目结构反馈。
 - [Godot 官方社区入口](https://godotengine.org/community/)
   官方列出的论坛、聊天和社交渠道。用于接触实际开发者的工作流与取舍。
+- [QFramework GitHub Issues](https://github.com/liangxiegame/QFramework/issues)
+  用于检索或提交可复现的框架问题；提问时应注明 Godot 版本、QFramework v0.4.1 与最小复现项目。
+
+## Gaps
+
+- 当前缺少针对 QFramework GDScript v0.4.1 的稳定自动化测试指南；后续应以框架源码和最小实验验证测试边界。
+- 尚未选择 Godot 原生单元测试方案；待 Snake 出现可脱离场景测试的业务规则后再评估，避免提前引入测试框架。
