@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第二十课：QFramework Event 与 CQRS</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 05 · v0.4.1 · 约 25 分钟</p>
+<h1>命令负责写，事件描述结果</h1>
+<p class="lead">本课的胜利条件：完成一局后，由 Command 修改 Model；保存成功后 Model 触发 <code>progress_saved</code>，订阅者只根据这个事实作出响应。</p>
+
+<h2>1. 先读懂当前闭环</h2>
+<pre><code>SnakeGame
+  → send CompleteGameCommand(final_score)  写入意图
+  → ProgressModel.record_completed_game()  修改业务状态
+  → StorageUtility.flush()                 持久化
+  → progress_saved.trigger()               已发生的事实</code></pre>
+<p>Command 用祈使含义命名：“完成这一局”。Event 用过去式事实命名：“进度已保存”。事件不知道谁会响应，也不命令某个 HUD 或成就系统做事。</p>
+
+<h2>2. 在 ProgressModel 定义事件</h2>
+<p>在 <code>progress_model.gd</code> 的状态字段附近添加：</p>
+<pre><code>var progress_saved := EasyEvent.new()</code></pre>
+<p>修改 <code>record_completed_game()</code> 的结尾：</p>
+<pre><code>var error := _storage.flush()
+if error != OK:
+    push_error("Could not save progress: %s" % error_string(error))
+    return
+
+progress_saved.trigger()</code></pre>
+<p>只有保存成功才广播 <code>progress_saved</code>。如果广播的是“状态在内存中已改变”，应该改用另一个准确名称，例如 <code>progress_changed</code>，并把触发位置放在状态修改之后。</p>
+
+<h2>3. 在场景中订阅，但不耦合发布者</h2>
+<p>在 <code>main.gd._ready()</code> 取得 Model 后添加：</p>
+<pre><code>progress_model.progress_saved.register(
+    _on_progress_saved
+).un_register_when_node_exiting_tree(self)</code></pre>
+<p>再添加临时诊断订阅者：</p>
+<pre><code>func _on_progress_saved() -&gt; void:
+    print(
+        "Progress saved: best=%d, games=%d"
+        % [progress_model.high_score, progress_model.games_played]
+    )</code></pre>
+<p><code>un_register_when_node_exiting_tree(self)</code> 把订阅生命周期绑定到场景节点。场景退出后，长期存在的 Model 不会继续调用已经释放的对象。</p>
+
+<h2>4. 为什么不手动在 _exit_tree() 注销</h2>
+<p>你当然可以保存 <code>UnRegister</code> 并手动调用，但框架已经提供与 Node 生命周期绑定的写法。它把“注册”和“何时失效”放在同一表达式中，更不容易漏掉。</p>
+
+<h2>5. 保留 Godot signal，不做二选一</h2>
+<table><thead><tr><th>事件</th><th>范围</th><th>选择</th></tr></thead><tbody>
+<tr><td><code>score_changed</code></td><td>当前 Snake 场景 → 自己的 HUD</td><td>Godot signal</td></tr>
+<tr><td><code>progress_saved</code></td><td>长期 Model → 任意跨层订阅者</td><td>EasyEvent</td></tr>
+</tbody></table>
+<p>QFramework Event 不是用来替换所有 Godot signal。节点之间天然可见、生命周期一致时，原生 signal 更直接；Architecture 内共享状态的跨层通知，EasyEvent 更方便。</p>
+
+<h2>6. CQRS 的最小含义</h2>
+<p>在本项目中先使用简化规则：</p>
+<ul>
+<li><strong>写：</strong>Controller 发送 Command，不直接编排共享状态修改。</li>
+<li><strong>通知：</strong>写操作完成后触发描述事实的 Event。</li>
+<li><strong>读：</strong>订阅者从 Model 读取展示所需状态。</li>
+</ul>
+<p>不要把 CQRS 理解为必须使用两套数据库或复杂消息总线；当前目标只是让读写意图清晰。</p>
+
+<h2>7. 验证与故障实验</h2>
+<div class="card task"><ol>
+<li>运行并结束一局，Output 应只打印一次 <code>Progress saved</code>。</li>
+<li>再开始并结束一局，局数应再增加一次。</li>
+<li>临时把 <code>StorageUtility.SAVE_PATH</code> 改成不可写位置。</li>
+<li>确认出现保存错误，并且不打印 <code>Progress saved</code>。</li>
+<li>立即恢复正确路径，再验证正常保存。</li>
+</ol></div>
+<p>这个实验验证的是事件语义：失败时没有发生“保存成功”这个事实，就不应触发同名事件。</p>
+
+<h2>8. 常见错误</h2>
+<ul>
+<li>把事件命名为 <code>save_progress</code>：这是命令口吻，不是事实。</li>
+<li>在 Command 和 Model 中各触发一次：订阅者会重复响应。</li>
+<li>注册后不注销：Autoload Model 会保留指向已释放场景的 Callable。</li>
+<li>让 Event 回调再次发送同一 Command：可能形成递归反馈环。</li>
+</ul>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>为什么 progress_saved 要在 flush 成功后触发？</summary><p>事件名称描述保存已经成功；失败时触发会向订阅者广播一个没有发生的事实。</p></details>
+<details><summary>为什么订阅要绑定 node exiting tree？</summary><p>Model 生命周期长于场景；自动注销可防止长期发布者继续持有和调用已经离开 SceneTree 的订阅者。</p></details>
+<details><summary>为什么保留 score_changed 原生信号？</summary><p>它服务于同一场景内部、生命周期一致的节点通信，原生 signal 更直接，不需要强行经过全局 Architecture。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/07.%20引入%20Event%20&amp;%20CQRS%20介绍.md">引入 Event &amp; CQRS</a>，并查看 <a href="../addons/qframework/framework/corekit/easy_event/scripts/event.gd">Event 源码</a> 与 <a href="../addons/qframework/framework/corekit/easy_event/scripts/un_register.gd">UnRegister 源码</a>。</p>
+
+<footer><a href="0019-qframework-first-command.html">← 第十九课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“进度事实已广播”</strong>，并回答：<em>为什么 progress_saved 不能在 flush() 之前触发？</em><br><br>如果回调重复执行，请把注册位置和触发位置一起发给我。</footer>
+</main></body></html>

@@ -33,13 +33,19 @@ var game_state := GameState.PLAYING
 func _ready() -> void:
 	progress_model = SnakeApp.get_model(ProgressModel.NAME) as ProgressModel
 	assert(progress_model != null, "ProgressModel is not registered")
-
+	progress_model.progress_saved.register(
+		_on_progress_saved
+	).un_register_when_node_exiting_tree(self)
 	randomize()
 	food_visual = FOOD_SCENE.instantiate()
 	add_child(food_visual)
 	new_game()
 	
-	
+func _on_progress_saved() -> void:
+	print(
+        "Progress saved: best=%d, games=%d"
+		% [progress_model.high_score, progress_model.games_played]
+	)	
 func set_game_state(next_state: GameState) -> void:
 	if game_state == next_state:
 		return

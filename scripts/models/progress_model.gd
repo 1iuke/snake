@@ -11,6 +11,8 @@ var high_score := 0
 var games_played := 0
 var _storage: StorageUtility
 
+var progress_saved := EasyEvent.new()
+
 func get_model_name() -> String: return NAME
 
 
@@ -31,3 +33,6 @@ func record_completed_game(final_score: int) -> void:
 	var error := _storage.flush()
 	if error != OK:
 		push_error("Could not save progress: %s" % error_string(error))
+		return
+	progress_saved.trigger()
+	
