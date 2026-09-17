@@ -1,0 +1,124 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十二课：调试与性能诊断</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 12 · 约 35 分钟</p>
+<h1>用证据定位问题</h1>
+<p class="lead">这一课的胜利条件：用断点解释一次蛇移动，用 Remote Inspector 找到 HUD 偏移来源，并录制一段 Profiler 基线，而不是靠猜测修改代码。</p>
+
+<h2>1. 四种问题，四种入口</h2>
+<div class="map">
+<div><strong>现象</strong></div><div class="arrow">工具</div><div><strong>回答的问题</strong></div>
+<div>数值或分支错误</div><div class="arrow">Breakpoint</div><div>代码当时看到了什么？</div>
+<div>运行时节点异常</div><div class="arrow">Remote Inspector</div><div>真实 SceneTree 是什么？</div>
+<div>报错或警告</div><div class="arrow">Debugger / Output</div><div>错误位置和调用栈是什么？</div>
+<div>卡顿或耗时</div><div class="arrow">Profiler</div><div>时间实际花在哪里？</div>
+</div>
+<p>先确定问题类别，再选择工具。到处添加 <code>print()</code> 或提前优化，往往只会制造更多噪音。</p>
+
+<h2>2. 断点：冻结一次蛇移动</h2>
+<div class="card task">
+<ol>
+<li>打开 <code>main.gd</code>，找到 <code>step_game()</code>。</li>
+<li>点击 <code>var new_head := snake[0] + direction</code> 左侧行号槽，放置红色断点。</li>
+<li>运行游戏，等待自动停住。</li>
+<li>在底部 Debugger 查看 Stack Frames 和 Variables。</li>
+</ol>
+</div>
+<p>此时记录：</p>
+<pre><code>snake[0]  = 当前蛇头格
+direction = 当前方向
+new_head  = 尚未执行或刚计算出的下一格
+game_state = PLAYING</code></pre>
+<p>使用：</p>
+<ul>
+<li><strong>Step Over：</strong>执行当前行，不进入被调用函数。</li>
+<li><strong>Step Into：</strong>若当前行调用函数，进入该函数。</li>
+<li><strong>Continue：</strong>继续运行到下一断点。</li>
+</ul>
+<p>观察完后移除断点，避免每次 Timer timeout 都暂停。</p>
+
+<h2>3. 调用栈讲述“怎么到这里”</h2>
+<p>在断点处，调用链应接近：</p>
+<pre><code>MoveTimer.timeout
+└── _on_move_timer_timeout()
+    └── step_game()</code></pre>
+<p>错误行回答“在哪里失败”，调用栈回答“通过哪条路径到达”。处理空引用或意外重复调用时，后者往往更重要。</p>
+
+<h2>4. Remote Inspector：调查 HUD 偏移</h2>
+<p>当前项目保留了一个真实待修项：<code>main.tscn</code> 的 Hud 实例曾保存非零 Offset。用运行时证据调查：</p>
+<div class="card task">
+<ol>
+<li>运行游戏并保持运行。</li>
+<li>切回编辑器，Scene 面板选择 <strong>Remote</strong>。</li>
+<li>展开 <code>SnakeGame → Hud</code>，在 Inspector 查看 Layout。</li>
+<li>记录 Hud 的运行时 Position、Size 和四个 Offset。</li>
+<li>切换回 <strong>Local</strong>，查看 <code>main.tscn</code> 的 Hud 实例覆盖值。</li>
+</ol>
+</div>
+<p><strong>关键规则：</strong>Remote 中临时改值适合验证假设，但停止游戏后不会保存。确认“Offset 清零能修复”后，要回到 Local 场景修改并保存。</p>
+
+<h2>5. Output 与 Errors 不一样</h2>
+<ul>
+<li><code>print()</code>：普通观察信息，出现在 Output。</li>
+<li><code>push_warning()</code>：值得注意但游戏可继续，进入 Debugger → Errors。</li>
+<li><code>push_error()</code>：操作失败或状态不可继续，进入 Errors 并带调用位置。</li>
+</ul>
+<pre><code>print("State changed: ", previous, " -> ", current)
+push_warning("Save file is invalid; using defaults")
+push_error("Could not write progress: %s" % error)</code></pre>
+<p>日志应回答问题，不应每帧刷屏。高频路径中的无限 print 会干扰性能和阅读。</p>
+
+<h2>6. Profiler：建立基线</h2>
+<div class="card task">
+<ol>
+<li>运行游戏。</li>
+<li>打开底部 <strong>Debugger → Profiler</strong>。</li>
+<li>点击 Start，正常游玩约 10 秒并吃几个食物。</li>
+<li>点击 Stop，查看 Frame Time、Physics Time 和 Script Functions。</li>
+<li>按 Self Time 或 Total Time 排序，记录最靠前的三个脚本函数。</li>
+</ol>
+</div>
+<p>这个小游戏很可能没有真实瓶颈，这本身也是结论。Profiler 会带来额外开销，所以比较前后必须使用相同场景和操作。</p>
+
+<h2>7. Monitors：观察趋势</h2>
+<p>在 Debugger 的 Monitors 中关注：</p>
+<ul>
+<li>FPS 与 Frame Time</li>
+<li>Object Count 与 Node Count</li>
+<li>Orphan Node Count</li>
+<li>Memory 使用趋势</li>
+</ul>
+<p>连续重开十次。如果 Node Count 一直增长且不回落，才值得怀疑实例没有释放。本项目只创建一次 Food，反复移动它，节点数应该稳定。</p>
+
+<h2>8. Debugger 的暂停与游戏内暂停不同</h2>
+<p>编辑器顶部的调试暂停会冻结执行，便于检查某一帧；游戏内 <code>GameState.PAUSED</code> 是产品逻辑，游戏仍在运行并渲染。不要把二者混为一谈。</p>
+
+<h2>9. 一份最小复现记录</h2>
+<pre><code>现象：HUD 向右偏移
+环境：Godot 4.7.2，main.tscn
+步骤：F6 → 查看顶部标题位置
+期望：左边距 60
+实际：整体向右偏移
+证据：Remote Hud offset_left = ...
+假设：main.tscn 实例覆盖了 hud.tscn 默认布局
+验证：Remote 中清零 Offset 后位置恢复</code></pre>
+<p>这类记录比“布局不对”更容易交给别人复现，也能防止自己重复试错。</p>
+
+<h2>10. 闭卷检索</h2>
+<details><summary>问题 1：错误行和调用栈分别告诉你什么？</summary><p>错误行指出失败位置；调用栈显示程序通过哪些调用路径到达该位置。</p></details>
+<details><summary>问题 2：为什么 Remote Inspector 的修复还要回到 Local 重做？</summary><p>Remote 修改的是正在运行的实例，只用于验证，停止运行后不会写回场景资源。</p></details>
+<details><summary>问题 3：为什么不能看到一个循环就立即优化？</summary><p>代码形状不能证明它是瓶颈；应先用 Profiler 测量实际耗时，再优化占主要成本的路径。</p></details>
+
+<h2>验收输出</h2>
+<div class="card task">
+<p>完成后保留三条简短记录：</p>
+<ol>
+<li>断点处一次实际的 snake head、direction、new head。</li>
+<li>Remote Hud 的 Offset，以及 Local 修复后的值。</li>
+<li>Profiler 中 Self Time 最高的脚本函数名称。</li>
+</ol>
+</div>
+
+<h2>主阅读</h2>
+<p>阅读官方 <a href="https://docs.godotengine.org/en/stable/tutorials/scripting/debug/overview_of_debugging_tools.html">Overview of debugging tools</a> 的 Breakpoints 与 Remote in scene dock，并浏览 <a href="https://docs.godotengine.org/en/4.7/tutorials/scripting/debug/">Debug</a> 文档目录。</p>
+
+<footer><a href="0011-game-state-machine.html">← 第十一课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“调试基线已记录”</strong>，附上三条验收记录，并回答：<em>为什么性能优化前必须先测量？</em></footer>
+</main></body></html>
