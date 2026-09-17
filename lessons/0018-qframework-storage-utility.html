@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十八课：用 Utility 隔离 ConfigFile</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 03 · v0.4.1 · 约 35 分钟</p>
+<h1>让业务数据不再知道 ConfigFile</h1>
+<p class="lead">本课的胜利条件：<code>ConfigFile</code> 和 <code>user://scores.cfg</code> 只出现在 <code>StorageUtility</code>；<code>ProgressModel</code> 只表达进度数据与业务操作；<code>main.gd</code> 不再负责存档细节。</p>
+
+<h2>1. 三层各自知道什么</h2>
+<table><thead><tr><th>对象</th><th>应该知道</th><th>不应该知道</th></tr></thead><tbody>
+<tr><td>StorageUtility</td><td>ConfigFile、路径、读写错误</td><td>什么叫最高分</td></tr>
+<tr><td>ProgressModel</td><td>最高分、局数、何时保存</td><td>ConfigFile 如何工作</td></tr>
+<tr><td>main.gd</td><td>何时吃到食物、何时结束一局</td><td>存档路径和字段格式</td></tr>
+</tbody></table>
+
+<h2>2. 创建 StorageUtility</h2>
+<div class="card task"><ol>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd> 打开 QFramework 面板。</li>
+<li>选择 <strong>创建 Utility</strong>，名称输入 <code>Storage</code>。</li>
+<li>确认生成类名为 <code>StorageUtility</code> 后创建。</li>
+</ol></div>
+<p>将生成脚本改为：</p>
+<pre><code>class_name StorageUtility extends AbstractUtility
+
+const NAME: String = "StorageUtility"
+const SAVE_PATH := "user://scores.cfg"
+
+var _config := ConfigFile.new()
+
+func get_utility_name() -&gt; String:
+    return NAME
+
+func init() -&gt; void:
+    var error := _config.load(SAVE_PATH)
+    if error != OK and error != ERR_FILE_NOT_FOUND:
+        push_warning("Could not load progress: %s" % error_string(error))
+
+func load_int(section: String, key: String, default_value: int = 0) -&gt; int:
+    return int(_config.get_value(section, key, default_value))
+
+func set_int(section: String, key: String, value: int) -&gt; void:
+    _config.set_value(section, key, value)
+
+func flush() -&gt; Error:
+    return _config.save(SAVE_PATH)</code></pre>
+<p>Utility 提供通用整数存储，不出现 <code>high_score</code> 等业务名称。</p>
+
+<h2>3. 注册 Utility</h2>
+<p>修改 <code>scripts/snake_app.gd</code>：</p>
+<pre><code>class_name SnakeAppArchitecture extends Architecture
+
+func init() -&gt; void:
+    register_utility(StorageUtility.new())
+    register_model(ProgressModel.new())</code></pre>
+<p>源码规定初始化顺序为 Utility → Model → System。因此即使它们都在 Architecture 的 <code>init()</code> 中登记，<code>ProgressModel.init()</code> 运行时 StorageUtility 已可使用。</p>
+
+<h2>4. 让 ProgressModel 管理自身业务</h2>
+<p>把 <code>progress_model.gd</code> 改为：</p>
+<pre><code>class_name ProgressModel extends AbstractModel
+
+const NAME: String = "ProgressModel"
+const SCORE_SECTION := "scores"
+const HIGH_SCORE_KEY := "high_score"
+const STATS_SECTION := "stats"
+const GAMES_PLAYED_KEY := "games_played"
+
+var high_score := 0
+var games_played := 0
+var _storage: StorageUtility
+
+func get_model_name() -&gt; String:
+    return NAME
+
+func init() -&gt; void:
+    _storage = get_utility(StorageUtility.NAME) as StorageUtility
+    assert(_storage != null, "StorageUtility is not registered")
+    high_score = maxi(0, _storage.load_int(SCORE_SECTION, HIGH_SCORE_KEY))
+    games_played = maxi(0, _storage.load_int(STATS_SECTION, GAMES_PLAYED_KEY))
+
+func update_high_score(candidate: int) -&gt; void:
+    high_score = maxi(high_score, candidate)
+
+func record_completed_game(final_score: int) -&gt; void:
+    update_high_score(final_score)
+    games_played += 1
+    _storage.set_int(SCORE_SECTION, HIGH_SCORE_KEY, high_score)
+    _storage.set_int(STATS_SECTION, GAMES_PLAYED_KEY, games_played)
+    var error := _storage.flush()
+    if error != OK:
+        push_error("Could not save progress: %s" % error_string(error))</code></pre>
+<p>Model 知道字段的业务含义；Utility 知道这些字段如何落盘。以后改用 JSON，只需替换 Utility 的实现与通用 API。</p>
+
+<h2>5. 精简 main.gd</h2>
+<p>删除：</p>
+<ul>
+<li><code>SAVE_PATH</code>；</li>
+<li><code>load_progress()</code>；</li>
+<li><code>save_progress()</code>；</li>
+<li><code>_ready()</code> 中的 <code>load_progress()</code> 调用。</li>
+</ul>
+<p>吃到食物时改为：</p>
+<pre><code>score += rules.score_per_food
+progress_model.update_high_score(score)
+score_changed.emit(score, progress_model.high_score)</code></pre>
+<p><code>finish_game()</code> 中改为：</p>
+<pre><code>func finish_game() -&gt; void:
+    move_timer.stop()
+    set_game_state(GameState.GAME_OVER)
+    progress_model.record_completed_game(score)
+    queue_redraw()</code></pre>
+<p>不要在 <code>main.gd</code> 中继续直接增加 <code>games_played</code> 或调用 ConfigFile。</p>
+
+<h2>6. 验证依赖方向</h2>
+<div class="card task"><ol>
+<li>运行游戏，Remote 树应同时出现 <code>Utility/StorageUtility</code> 与 <code>Model/ProgressModel</code>。</li>
+<li>确认启动后旧最高分被加载。</li>
+<li>完成一局，确认局数加一；重启后数据仍在。</li>
+<li>全局搜索 <code>ConfigFile</code>：业务代码中应只命中 <code>StorageUtility</code>。</li>
+<li>全局搜索 <code>scores.cfg</code>：应只命中 <code>StorageUtility</code>。</li>
+</ol></div>
+
+<h2>7. 一个重要边界</h2>
+<p>Utility 是基础能力，不是“任何不知道放哪的代码”。例如：</p>
+<ul>
+<li>文件读写、随机数适配、网络客户端：可以是 Utility。</li>
+<li>加分规则、胜负判断、关卡解锁：具有业务语义，不应成为 Utility。</li>
+</ul>
+
+<h2>8. 闭卷检索</h2>
+<details><summary>为什么 StorageUtility 不直接拥有 high_score？</summary><p>Utility 负责存储技术，Model 负责业务状态；否则基础设施层会反向拥有游戏领域数据。</p></details>
+<details><summary>为什么 ProgressModel.init() 能取得 StorageUtility？</summary><p>QFramework Architecture 在登记完成后，按 Utility → Model → System 的顺序挂载并初始化。</p></details>
+<details><summary>改用 JSON 时，哪些代码应尽量不变？</summary><p><code>main.gd</code> 和 ProgressModel 的业务逻辑应保持稳定，变化集中在存储 Utility 实现。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/08.%20引入%20Utility.md">引入 Utility</a>，并对照 <a href="../addons/qframework/framework/architecture/abstract_utility.gd">AbstractUtility 源码</a>。</p>
+
+<footer><a href="0017-qframework-first-model.html">← 第十七课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“存档已归 Utility”</strong>，并回答：<em>为什么 StorageUtility 不应该直接拥有 high_score？</em><br><br>如果启动时 Model 取不到 Utility，请先截图 Remote 树和首个 Debugger 错误。</footer>
+</main></body></html>
