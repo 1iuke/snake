@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十九课：第一个 QFramework Command</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 04 · v0.4.1 · 约 25 分钟</p>
+<h1>把“完成一局”表达成 Command</h1>
+<p class="lead">本课的胜利条件：<code>main.gd</code> 只宣布“完成了一局，最终得分为多少”，由 <code>CompleteGameCommand</code> 找到 Model 并执行进度写操作。</p>
+
+<h2>0. 前置门禁：上一课必须只有一个存档入口</h2>
+<div class="card task"><ol>
+<li>从 <code>main.gd</code> 删除 <code>SAVE_PATH</code>。</li>
+<li>删除整个 <code>load_progress()</code> 与 <code>save_progress()</code>。</li>
+<li>删除 <code>_ready()</code> 中的 <code>load_progress()</code> 调用。</li>
+<li>全局搜索 <code>ConfigFile</code> 与 <code>scores.cfg</code>，业务代码中都应只命中 <code>storage_utility.gd</code>。</li>
+</ol></div>
+<p>如果门禁未通过，先不要创建 Command。重复入口会让你无法判断数据究竟由谁加载。</p>
+
+<h2>1. Command 解决的不是“代码行数”</h2>
+<p>当前结束一局的交互链是：</p>
+<pre><code>SnakeGame.finish_game()
+  → ProgressModel.record_completed_game(score)
+  → 更新最高分与局数
+  → StorageUtility 落盘</code></pre>
+<p>Controller 已经知道了具体 Model 及其写方法。Command 把这段<strong>写操作意图</strong>变成独立对象：</p>
+<pre><code>Controller → CompleteGameCommand → ProgressModel → StorageUtility</code></pre>
+
+<h2>2. 生成 CompleteGameCommand</h2>
+<div class="card task"><ol>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd> 打开 QFramework 面板。</li>
+<li>选择 <strong>创建 Command</strong>。</li>
+<li>名称输入 <code>CompleteGame</code>，确认将生成 <code>CompleteGameCommand</code>。</li>
+<li>点击创建。</li>
+</ol></div>
+<p>修改生成的 <code>scripts/commands/complete_game_command.gd</code>：</p>
+<pre><code>class_name CompleteGameCommand extends AbstractCommand
+
+var final_score: int
+
+func _init(value: int) -&gt; void:
+    final_score = value
+
+func execute() -&gt; void:
+    var model := get_model(ProgressModel.NAME) as ProgressModel
+    assert(model != null, "ProgressModel is not registered")
+    model.record_completed_game(final_score)</code></pre>
+<p>Command 不需要注册到 Architecture；它是一次性对象。<code>send_command()</code> 会在执行期间注入 Architecture，使其能够调用 <code>get_model()</code>。</p>
+
+<h2>3. Controller 只发送意图</h2>
+<p>将 <code>finish_game()</code> 中：</p>
+<pre><code>progress_model.record_completed_game(score)</code></pre>
+<p>替换为：</p>
+<pre><code>SnakeApp.send_command(CompleteGameCommand.new(score))</code></pre>
+<p>完整函数保持简洁：</p>
+<pre><code>func finish_game() -&gt; void:
+    move_timer.stop()
+    set_game_state(GameState.GAME_OVER)
+    SnakeApp.send_command(CompleteGameCommand.new(score))
+    queue_redraw()</code></pre>
+
+<h2>4. 不要为了 Command 而 Command</h2>
+<p>本课只封装“完成一局”，因为它包含：</p>
+<ul>
+<li>接受最终得分；</li>
+<li>更新最高分；</li>
+<li>增加已玩局数；</li>
+<li>触发持久化。</li>
+</ul>
+<p><code>queue_direction()</code>、绘制网格或播放一次声音仍留在场景脚本。它们是局部节点行为，没有必要制造命令对象。</p>
+
+<h2>5. 观察 send_command() 的注入过程</h2>
+<p>直接查看 QFramework 的 <code>architecture.gd</code>：</p>
+<pre><code>func send_command(command: AbstractCommand):
+    command.architecture = self
+    var ret_value = await command.execute()
+    command.architecture = null
+    return ret_value</code></pre>
+<p>所以 Command 只在执行期间持有 Architecture；执行结束后引用会被清空。这也是它适合表达一次性用例，而不适合保存长期状态的原因。</p>
+
+<h2>6. 验证</h2>
+<div class="card task"><ol>
+<li>运行游戏并完成一局。</li>
+<li>确认 <code>games_played</code> 只增加一次。</li>
+<li>确认最高分与存档仍正常。</li>
+<li>在 <code>CompleteGameCommand.execute()</code> 临时下断点，检查 <code>final_score</code> 与 <code>architecture</code>。</li>
+<li>继续运行，验证后删除断点。</li>
+<li>全局搜索 <code>record_completed_game</code>：调用方应只剩 Command。</li>
+</ol></div>
+
+<h2>7. 闭卷检索</h2>
+<details><summary>为什么 Command 不需要 register_command()？</summary><p>Command 是按需创建和执行的一次性用例对象，不是由 Architecture 长期持有的共享服务或状态。</p></details>
+<details><summary>Command 如何取得 ProgressModel？</summary><p><code>send_command()</code> 在执行前临时注入 Architecture，Command 再通过 <code>get_model()</code> 查询已注册 Model。</p></details>
+<details><summary>为什么不把每次方向输入都封装成 Command？</summary><p>它目前只是当前场景实例的局部行为，没有共享业务写操作；引入 Command 只会增加间接层。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/06.%20引入%20Command.md">引入 Command</a>，并对照 <a href="../addons/qframework/framework/architecture/abstract_command.gd">AbstractCommand</a> 与 <a href="../addons/qframework/framework/architecture/architecture.gd">Architecture.send_command()</a> 源码。</p>
+
+<footer><a href="0018-qframework-storage-utility.html">← 第十八课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“完成一局已命令化”</strong>，并回答：<em>为什么 Command 不需要像 Model 一样注册到 Architecture？</em><br><br>如果局数一次增加两次，首先检查旧存档调用是否仍存在。</footer>
+</main></body></html>

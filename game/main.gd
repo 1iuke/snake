@@ -147,7 +147,7 @@ func spawn_food() -> void:
 func finish_game() -> void:
 	move_timer.stop()
 	set_game_state(GameState.GAME_OVER)
-	progress_model.record_completed_game(score)
+	SnakeApp.send_command(CompleteGameCommand.new(score))
 	queue_redraw()
 
 
