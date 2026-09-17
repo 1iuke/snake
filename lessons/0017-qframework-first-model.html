@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十七课：第一个 QFramework Model</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 02 · v0.4.1 · 约 30 分钟</p>
+<h1>只迁移真正共享的数据</h1>
+<p class="lead">本课的胜利条件：把 <code>high_score</code> 和 <code>games_played</code> 迁移到 <code>ProgressModel</code>，同时让本局 <code>score</code> 继续留在游戏场景。</p>
+
+<h2>1. 先判断数据的生命周期</h2>
+<table><thead><tr><th>数据</th><th>生命周期</th><th>所有者</th></tr></thead><tbody>
+<tr><td><code>score</code></td><td>一局游戏；重开归零</td><td><code>main.gd</code></td></tr>
+<tr><td><code>high_score</code></td><td>跨局、跨场景、跨启动</td><td><code>ProgressModel</code></td></tr>
+<tr><td><code>games_played</code></td><td>跨局、跨场景、跨启动</td><td><code>ProgressModel</code></td></tr>
+<tr><td><code>direction</code></td><td>当前 Snake 场景实例</td><td><code>main.gd</code></td></tr>
+</tbody></table>
+<p>Model 不是“变量收纳箱”。判断标准是数据是否具有共享业务语义，而不是代码能否移动。</p>
+
+<h2>2. 用生成器创建 ProgressModel</h2>
+<div class="card task"><ol>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd> 打开 QFramework 面板。</li>
+<li>选择 <strong>创建 Model</strong>。</li>
+<li>名称输入 <code>Progress</code>，确认预览类名为 <code>ProgressModel</code>。</li>
+<li>点击创建；生成路径以面板预览为准。</li>
+</ol></div>
+<p>将生成脚本调整为：</p>
+<pre><code>class_name ProgressModel extends AbstractModel
+
+const NAME: String = "ProgressModel"
+
+var high_score := 0
+var games_played := 0
+
+func get_model_name() -&gt; String:
+    return NAME
+
+func init() -&gt; void:
+    pass</code></pre>
+<p>这里先保存状态，不做文件 I/O。存档能力会在下一课成为 Utility。</p>
+
+<h2>3. 在 SnakeApp 中注册</h2>
+<p>打开生成的 <code>scripts/snake_app.gd</code>：</p>
+<pre><code>class_name SnakeAppArchitecture extends Architecture
+
+func init() -&gt; void:
+    register_model(ProgressModel.new())</code></pre>
+<p><code>register_model()</code> 先按 <code>NAME</code> 放入字典；随后 Architecture 才会把 Model 加到运行时的 <code>Model</code> 节点并调用其 <code>init()</code>。</p>
+
+<h2>4. main.gd 获取 Model</h2>
+<p>删除原来的：</p>
+<pre><code>var high_score := 0
+var games_played := 0</code></pre>
+<p>保留 <code>var score := 0</code>，并添加：</p>
+<pre><code>var progress_model: ProgressModel</code></pre>
+<p>在 <code>_ready()</code> 的最前面获取 Model：</p>
+<pre><code>func _ready() -&gt; void:
+    progress_model = SnakeApp.get_model(ProgressModel.NAME) as ProgressModel
+    assert(progress_model != null, "ProgressModel is not registered")
+
+    randomize()
+    # 原有初始化继续……</code></pre>
+<p>Autoload 会先于当前场景进入树，所以 <code>main.gd._ready()</code> 执行时，注册流程应已结束。</p>
+
+<h2>5. 逐处替换共享数据访问</h2>
+<p>只替换这两个变量，不改变函数职责：</p>
+<pre><code># load_progress()
+progress_model.high_score = maxi(
+    0,
+    int(config.get_value("scores", "high_score", 0))
+)
+progress_model.games_played = maxi(
+    0,
+    int(config.get_value("stats", "games_played", 0))
+)
+
+# save_progress()
+config.set_value("scores", "high_score", progress_model.high_score)
+config.set_value("stats", "games_played", progress_model.games_played)</code></pre>
+<p>其余位置按同样规则替换：</p>
+<pre><code>score_changed.emit(score, progress_model.high_score)
+
+progress_model.high_score = maxi(progress_model.high_score, score)
+progress_model.games_played += 1</code></pre>
+<p>速度计算仍使用局部 <code>score</code>；HUD 信号也暂时保留。一次只改变数据所有权，不同时引入 Command、Event 和绑定。</p>
+
+<h2>6. 清理场景对 Model 的引用</h2>
+<pre><code>func _exit_tree() -&gt; void:
+    progress_model = null</code></pre>
+<p>这不会删除 Model；Model 的所有者是 <code>SnakeApp</code>。这里只是让即将释放的场景明确丢弃引用。</p>
+
+<h2>7. 两层验证</h2>
+<div class="card task"><ol>
+<li>运行游戏，在 Remote 树展开 <code>SnakeApp → Model</code>，确认存在 <code>ProgressModel</code>。</li>
+<li>选中它，在 Inspector 中观察 <code>high_score</code> 和 <code>games_played</code>。</li>
+<li>吃到食物并结束一局，确认数值随业务变化。</li>
+<li>关闭再运行游戏，确认 ConfigFile 仍能恢复旧数据。</li>
+<li>全局搜索独立的 <code>var high_score</code> 和 <code>var games_played</code>，应只在 Model 中定义。</li>
+</ol></div>
+
+<h2>8. 常见错误</h2>
+<ul>
+<li><strong>Invalid get index：</strong>忘记在 <code>SnakeApp.init()</code> 注册 Model，或 <code>NAME</code> 不一致。</li>
+<li><strong>Parser Error：</strong>生成脚本尚未被 Godot 扫描，先等待脚本重新加载并修复首个报错。</li>
+<li><strong>存档被清零：</strong>确保先取得 Model、再 <code>load_progress()</code>、最后 <code>new_game()</code>。</li>
+<li><strong>Remote 看见两个 Model：</strong>检查是否重复调用了 <code>register_model()</code>。</li>
+</ul>
+
+<h2>9. 闭卷检索</h2>
+<details><summary>为什么 score 没有迁入 ProgressModel？</summary><p>它只属于当前一局和当前游戏场景，重开即归零，暂时没有跨时间或跨对象共享的需求。</p></details>
+<details><summary>为什么存档函数暂时仍在 main.gd？</summary><p>本课只改变数据所有权；文件 I/O 将作为独立的 Utility 迁移，避免一次改动多个架构维度。</p></details>
+<details><summary>是谁拥有 ProgressModel 的生命周期？</summary><p>Autoload 的 <code>SnakeApp</code> Architecture；游戏场景只是通过名称取得并暂时引用它。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/05.%20引入%20Model%20&amp;%20什么是需要共享的数据.md">引入 Model &amp; 什么是需要共享的数据</a>，并对照 <a href="../addons/qframework/framework/architecture/abstract_model.gd">AbstractModel 源码</a>。</p>
+<p><a href="../reference/qframework-architecture-map.html">复习 Architecture 分层速查</a></p>
+
+<footer><a href="0016-qframework-architecture-lifecycle.html">← 第十六课</a><br><br>完成后回复：<strong>“进度数据已归 Model”</strong>，并回答：<em>为什么 score 留在 main.gd，而 high_score 进入 Model？</em><br><br>如果生成器给出的类名或路径不同，以面板预览为准，并把结果发给我核对。</footer>
+</main></body></html>

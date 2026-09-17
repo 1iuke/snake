@@ -18,8 +18,8 @@ const FOOD_SCENE := preload("res://actors/food.tscn")
 var food_visual: Node2D
 
 var score := 0
-var high_score := 0
-var games_played:= 0
+var progress_model: ProgressModel
+
 @onready var move_timer: Timer = $MoveTimer
 
 
@@ -32,6 +32,9 @@ enum GameState {
 var game_state := GameState.PLAYING
 
 func _ready() -> void:
+	progress_model = SnakeApp.get_model(ProgressModel.NAME) as ProgressModel
+	assert(progress_model != null, "ProgressModel is not registered")
+
 	randomize()
 	food_visual = FOOD_SCENE.instantiate()
 	add_child(food_visual)
@@ -63,21 +66,19 @@ func load_progress() -> void:
 	if error != OK:
 		push_warning("Could not load high score: %s" % error)
 		return
-
-
-	high_score = maxi(
+	progress_model.high_score = maxi(
 		0,
 		int(config.get_value("scores", "high_score", 0))
 	)
-	games_played = maxi(
+	progress_model.games_played = maxi(
 		0,
 		int(config.get_value("stats", "games_played", 0))
 	)
 
 func save_progress() -> void:
 	var config := ConfigFile.new()
-	config.set_value("scores", "high_score", high_score)
-	config.set_value("stats", "games_played", games_played )
+	config.set_value("scores", "high_score", progress_model.high_score)
+	config.set_value("stats", "games_played", progress_model.games_played )
 	var error := config.save(SAVE_PATH)
 	if error != OK:
 		push_error("Could not save high score: %s" % error)
@@ -87,7 +88,7 @@ func new_game() -> void:
 	direction = Vector2i.RIGHT
 	queued_direction = direction
 	score = 0
-	score_changed.emit(score, high_score)
+	score_changed.emit(score, progress_model.high_score)
 	set_game_state(GameState.PLAYING)
 	move_timer.start(rules.start_speed)
 	spawn_food()
@@ -138,8 +139,8 @@ func step_game() -> void:
 	if ate_food:
 		eat_sound.play()
 		score += rules.score_per_food
-		high_score = maxi(high_score, score)
-		score_changed.emit(score, high_score)
+		#progress_model.high_score = maxi(progress_model.high_score, score)
+		score_changed.emit(score, progress_model.high_score)
 		move_timer.wait_time = maxf(
 			rules.min_speed,
 			rules.start_speed - score * rules.speed_up_per_point)
@@ -173,8 +174,8 @@ func spawn_food() -> void:
 func finish_game() -> void:
 	move_timer.stop()
 	set_game_state(GameState.GAME_OVER)
-	high_score = maxi(high_score, score)
-	games_played += 1
+	progress_model.high_score = maxi(progress_model.high_score, score)
+	progress_model.games_played += 1
 	save_progress()
 	queue_redraw()
 
@@ -238,3 +239,5 @@ func draw_overlay() -> void:
 func _on_move_timer_timeout() -> void:
 	if game_state == GameState.PLAYING:
 		step_game()
+func _exit_tree() -> void:
+	progress_model = null
