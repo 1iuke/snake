@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十六课：QFramework Architecture 生命周期</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 01 · v0.4.1 · 约 20 分钟</p>
+<h1>先让 Architecture 活起来</h1>
+<p class="lead">本课的胜利条件：创建 <code>SnakeApp</code> Architecture，运行游戏后在 Remote 场景树看到它及三层节点，并能解释它为什么不随 <code>main.tscn</code> 消失。</p>
+
+<h2>1. Architecture 在 Godot 中究竟是什么</h2>
+<p>它不是脱离引擎的“魔法容器”。你项目中的 <code>Architecture</code> 源码继承自 <code>Node</code>；生成的具体架构会注册为 Autoload，成为 <code>/root</code> 下长期存在的节点。</p>
+<pre><code>SceneTree.root
+├── SnakeApp        ← Autoload Architecture
+│   ├── System
+│   ├── Model
+│   └── Utility
+└── SnakeGame       ← 当前场景</code></pre>
+<p>因此，Architecture 的跨场景生命周期来自 Godot Autoload，不是框架绕开了 SceneTree。</p>
+
+<h2>2. 用框架面板创建 SnakeApp</h2>
+<div class="card task"><ol>
+<li>确认插件已启用：<strong>Project → Project Settings → Plugins</strong> 中 QFramework 为 On。</li>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd>，或打开编辑器底部的 QFramework 面板。</li>
+<li>选择 <strong>创建 Architecture</strong>。</li>
+<li>名称输入 <code>SnakeApp</code>，先检查面板显示的生成路径和 Autoload 名。</li>
+<li>点击创建，不要手动复制框架内部脚本。</li>
+</ol></div>
+<p>创建后，到 <strong>Project Settings → Globals → Autoload</strong> 确认存在且启用 <code>SnakeApp</code>。</p>
+
+<h2>3. 保持第一次 init() 为空</h2>
+<p>生成脚本应表达下面这个结构；文件位置以生成器实际结果为准：</p>
+<pre><code>class_name SnakeAppArchitecture extends Architecture
+
+func init():
+    pass</code></pre>
+<p>本课不注册 Model、System 或 Utility。先验证基础设施，再迁移业务，可以把“框架安装问题”和“业务重构问题”分开。</p>
+
+<h2>4. 用 Remote 场景树验证</h2>
+<div class="card task"><ol>
+<li>按 <kbd>F5</kbd> 运行当前 Snake。</li>
+<li>不要停止游戏，切回编辑器的 Scene 面板。</li>
+<li>从 <strong>Local</strong> 切换到 <strong>Remote</strong>。</li>
+<li>展开根节点并找到 <code>SnakeApp</code>。</li>
+<li>确认它下面出现 <code>System</code>、<code>Model</code>、<code>Utility</code>。</li>
+</ol></div>
+<p>如果只有 <code>SnakeApp</code> 而没有三层节点，检查 Debugger 报错；这些子节点由 <code>Architecture._ready()</code> 在运行时创建，所以 Local 树中看不到是正常的。</p>
+
+<h2>5. 从源码读出真实生命周期</h2>
+<p>打开 <code>addons/qframework/framework/architecture/architecture.gd</code>，找到 <code>_ready()</code>。按执行顺序回答：</p>
+<ol>
+<li>先调用具体 Architecture 的 <code>init()</code>，让它登记对象。</li>
+<li>创建三个分层节点。</li>
+<li>依次挂载并初始化 Utility、Model、System。</li>
+</ol>
+<p>关键区别：<strong>register</strong> 是把对象放入字典；随后框架才把它加入 SceneTree，并调用对象自己的 <code>init()</code>。</p>
+
+<h2>6. 给现有 Snake 画边界，但不迁移</h2>
+<table><thead><tr><th>现有内容</th><th>候选位置</th><th>本课是否移动</th></tr></thead><tbody>
+<tr><td>score / high_score / games_played</td><td>Model</td><td>否</td></tr>
+<tr><td>ConfigFile 存档读写</td><td>Utility</td><td>否</td></tr>
+<tr><td>游戏状态转换规则</td><td>System 候选</td><td>否</td></tr>
+<tr><td>方向输入与节点绘制</td><td>Controller / View</td><td>否</td></tr>
+</tbody></table>
+<p>框架化的第一步不是搬代码，而是识别<strong>谁拥有数据、谁执行规则、谁接触节点</strong>。</p>
+
+<h2>7. 闭卷检索</h2>
+<details><summary>为什么 SnakeApp 能跨场景存在？</summary><p>它被注册为 Godot Autoload，是 SceneTree 根节点下独立于当前场景的 Node。</p></details>
+<details><summary>为什么本课不立刻把 score 搬进 Architecture？</summary><p>先单独验证框架生命周期，避免把安装、初始化和业务迁移问题混在一次改动里。</p></details>
+<details><summary>Local 树没有三层节点，是否说明创建失败？</summary><p>不是。三层节点由运行时的 <code>_ready()</code> 动态创建，应在 Remote 树中检查。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/01.%20简介.md">Architecture 简介</a>，并直接查看 <a href="../addons/qframework/framework/architecture/architecture.gd">architecture.gd 源码</a>。本项目中的 v0.4.1 源码是本课 API 的最终依据。</p>
+<p><a href="../reference/qframework-architecture-map.html">打开 Architecture 分层速查表</a></p>
+
+<footer><a href="0014-export-windows-build.html">← 核心课程收官课</a> · 第十五课仍暂缓<br><br>完成后回复：<strong>“SnakeApp 三层已出现”</strong>，并回答：<em>Architecture 的跨场景生命周期，底层依赖 Godot 的什么机制？</em><br><br>如果生成器、Autoload 或 Remote 树与课程不同，把截图发给我再继续。</footer>
+</main></body></html>

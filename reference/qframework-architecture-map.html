@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>QFramework Architecture 速查</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework v0.4.1 · Quick Reference</p>
+<h1>Architecture 分层速查</h1>
+<table>
+<thead><tr><th>角色</th><th>负责</th><th>不负责</th></tr></thead>
+<tbody>
+<tr><td>Controller</td><td>接收输入、协调用例、更新 View</td><td>保存共享业务状态</td></tr>
+<tr><td>Model</td><td>业务数据、数据约束、状态变更</td><td>直接操作界面节点</td></tr>
+<tr><td>System</td><td>跨模型的业务规则与流程</td><td>渲染具体 UI</td></tr>
+<tr><td>Utility</td><td>无业务语义的基础能力</td><td>决定游戏规则</td></tr>
+<tr><td>Command</td><td>表达一次写操作</td><td>承载长期状态</td></tr>
+<tr><td>Query</td><td>表达一次读操作</td><td>修改业务状态</td></tr>
+<tr><td>Event</td><td>广播已经发生的事实</td><td>命令特定对象执行动作</td></tr>
+</tbody></table>
+<h2>v0.4.1 启动顺序</h2>
+<pre><code>Architecture._ready()
+  → init()：登记成员
+  → 创建 System / Model / Utility 节点
+  → Utility.init()
+  → Model.init()
+  → System.init()</code></pre>
+<h2>Snake 的初步边界</h2>
+<ul>
+<li>分数、最高分、局数：候选 Model 数据。</li>
+<li>存档读写：候选 Utility。</li>
+<li>开始、暂停、结束流程：候选 System；是否迁移需由真实复杂度决定。</li>
+<li>方向输入、绘制、HUD 节点引用：仍属于场景 Controller / View。</li>
+</ul>
+<p>判断口诀：先确认共享需求，再提升到 Architecture；不要因为框架存在，就搬走所有变量。</p>
+</main></body></html>

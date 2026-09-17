@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第十五课：多场景与场景切换</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Advanced 01 · 约 25 分钟</p>
+  <h1>给 Snake 添加标题场景</h1>
+  <p class="lead">本课的胜利条件：项目先显示标题界面，点击“开始游戏”后，由 SceneTree 卸载标题场景并加载现有的 <code>main.tscn</code>。</p>
+
+  <h2>1. 当前场景不是永远存在的对象</h2>
+  <p>运行项目时，<code>SceneTree</code> 管理整棵节点树，其中一个节点是 <code>current_scene</code>。切换场景并不是隐藏旧画面，而是替换当前场景：</p>
+  <pre><code>Title 被移出树并释放
+        ↓
+Game 被实例化并进入树</code></pre>
+  <p>因此，保存在标题场景节点里的普通变量会随场景消失；写入 <code>user://</code> 的数据不会。</p>
+
+  <h2>2. 创建 title.tscn</h2>
+  <div class="card task">
+    <ol>
+      <li>创建新场景，根节点选 <strong>Control</strong>，命名为 <code>Title</code>。</li>
+      <li>对根节点执行 <strong>Layout → Full Rect</strong>。</li>
+      <li>添加 <code>CenterContainer</code>，同样设为 Full Rect。</li>
+      <li>在其中添加 <code>VBoxContainer</code>。</li>
+      <li>VBox 下依次添加 <code>Label</code>、<code>Button</code>、<code>Button</code>。</li>
+      <li>命名为 <code>TitleLabel</code>、<code>StartButton</code>、<code>QuitButton</code>。</li>
+      <li>文本设为 <strong>SNAKE</strong>、<strong>开始游戏</strong>、<strong>退出</strong>，保存为 <code>title.tscn</code>。</li>
+    </ol>
+  </div>
+  <p><code>CenterContainer</code> 负责居中，<code>VBoxContainer</code> 负责纵向排列。不要再手动拖动其直接子节点。</p>
+
+  <h2>3. 用信号表达按钮事件</h2>
+  <p>给 <code>Title</code> 根节点附加 <code>title.gd</code>：</p>
+  <pre><code>extends Control
+
+const GAME_SCENE := "res://main.tscn"
+
+func _on_start_button_pressed() -&gt; void:
+    var error := get_tree().change_scene_to_file(GAME_SCENE)
+    if error != OK:
+        push_error("Unable to open game scene: %s" % error_string(error))
+
+func _on_quit_button_pressed() -&gt; void:
+    get_tree().quit()</code></pre>
+  <div class="card task">
+    <ol>
+      <li>选中 <code>StartButton</code>，在 Node → Signals 中双击 <code>pressed()</code>。</li>
+      <li>连接到 <code>_on_start_button_pressed</code>。</li>
+      <li>把 <code>QuitButton.pressed()</code> 连接到另一函数。</li>
+    </ol>
+  </div>
+  <p>检查返回的 <code>Error</code> 能让错误路径或损坏场景立即给出明确诊断。</p>
+
+  <h2>4. 把标题设为 Main Scene</h2>
+  <div class="card task">
+    <ol>
+      <li>选择 <strong>Project → Project Settings → Application → Run</strong>。</li>
+      <li>把 <strong>Main Scene</strong> 改为 <code>title.tscn</code>。</li>
+      <li>按 <kbd>F5</kbd>：应该先进入标题界面。</li>
+      <li>点击开始：应该进入原来的 Snake 游戏。</li>
+      <li>重新按 <kbd>F5</kbd>：应再次从标题界面开始。</li>
+    </ol>
+  </div>
+  <p>你刚才区分过的知识现在参与真实设计：<kbd>F6</kbd> 运行当前编辑场景；<kbd>F5</kbd> 和导出程序都从 Main Scene 开始。</p>
+
+  <h2>5. 观察生命周期</h2>
+  <p>临时在 <code>title.gd</code> 中加入：</p>
+  <pre><code>func _ready() -&gt; void:
+    print("Title entered tree")
+
+func _exit_tree() -&gt; void:
+    print("Title exited tree")</code></pre>
+  <p>运行并点击开始，观察 Output 的顺序。验证后删除这两段诊断代码。</p>
+
+  <h2>6. 现在不要添加 Autoload</h2>
+  <p>基本场景切换只需要 <code>SceneTree.change_scene_to_file()</code>。只有数据或服务确实需要跨越多个场景长期存活时，才考虑 Autoload，例如音乐播放器、会话配置或复杂转场控制器。</p>
+  <p>当前最高分已经保存在 <code>user://</code>；仅为“跨场景”再创建全局管理器，并不会带来实际收益。</p>
+
+  <h2>7. 闭卷检索</h2>
+  <details><summary>切换场景后，旧场景节点里的普通变量怎样了？</summary><p>旧场景被移出 SceneTree 并释放，其节点和普通成员状态一同消失。</p></details>
+  <details><summary>为什么最高分仍然存在？</summary><p>它已经写入 <code>user://</code>，生命周期独立于当前场景实例。</p></details>
+  <details><summary>为什么本课不需要 Autoload？</summary><p>需求只是替换当前场景，SceneTree 已直接提供该能力，没有必须跨场景存活的新对象。</p></details>
+
+  <h2>主阅读</h2>
+  <p>阅读 Godot 官方 <a href="https://docs.godotengine.org/en/stable/tutorials/scripting/scene_tree.html">Using SceneTree</a> 的 “Changing current scene” 与节点进入/退出树的顺序。</p>
+
+  <footer>
+    <a href="0014-export-windows-build.html">← 第十四课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 对照</a><br><br>
+    完成后回复：<strong>“标题场景已接管入口”</strong>，并回答：<em>场景切换后，哪些状态会消失，哪些状态会保留？</em><br><br>
+    如果节点布局、信号连接或路径报错，把截图或完整错误发给我。
+  </footer>
+</main>
+</body>
+</html>
