@@ -22,9 +22,14 @@ var high_score := 0
 var games_played:= 0
 @onready var move_timer: Timer = $MoveTimer
 
-var game_over := false
-var paused := false
 
+enum GameState {
+	PLAYING,
+	PAUSED,
+	GAME_OVER,
+}
+
+var game_state := GameState.PLAYING
 
 func _ready() -> void:
 	randomize()
@@ -32,6 +37,22 @@ func _ready() -> void:
 	add_child(food_visual)
 	load_progress()
 	new_game()
+	
+	
+func set_game_state(next_state: GameState) -> void:
+	if game_state == next_state:
+		return
+
+	game_state = next_state
+
+	match game_state:
+		GameState.PLAYING:
+			move_timer.paused = false
+		GameState.PAUSED:
+			move_timer.paused = true
+		GameState.GAME_OVER:
+			move_timer.stop()
+	queue_redraw()
 	
 func load_progress() -> void:
 	var config := ConfigFile.new()
@@ -67,9 +88,8 @@ func new_game() -> void:
 	queued_direction = direction
 	score = 0
 	score_changed.emit(score, high_score)
+	set_game_state(GameState.PLAYING)
 	move_timer.start(rules.start_speed)
-	game_over = false
-	paused = false
 	spawn_food()
 	queue_redraw()
 
@@ -87,16 +107,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("move_right"):
 		queue_direction(Vector2i.RIGHT)
 	elif event.is_action_pressed("pause_game"):
-		if not game_over:
-			paused = not paused
-			queue_redraw()
+		match game_state:
+			GameState.PLAYING:
+				set_game_state(GameState.PAUSED)
+			GameState.PAUSED:
+				set_game_state(GameState.PLAYING)
+		queue_redraw()
 	elif event.is_action_pressed("restart_game"):
-		if game_over:
+		if game_state == GameState.GAME_OVER:
 			new_game()
 
 
 func queue_direction(next_direction: Vector2i) -> void:
-	if not game_over and next_direction != -direction:
+	if  (game_state == GameState.PLAYING and next_direction != -direction):
 		queued_direction = next_direction
 
 
@@ -149,7 +172,7 @@ func spawn_food() -> void:
 
 func finish_game() -> void:
 	move_timer.stop()
-	game_over = true
+	set_game_state(GameState.GAME_OVER)
 	high_score = maxi(high_score, score)
 	games_played += 1
 	save_progress()
@@ -168,7 +191,7 @@ func _draw() -> void:
 	draw_board()
 	draw_snake()
 	draw_footer()
-	if paused or game_over:
+	if game_state != GameState.PLAYING:
 		draw_overlay()
 
 
@@ -204,12 +227,14 @@ func draw_footer() -> void:
 func draw_overlay() -> void:
 	var board_rect := Rect2(BOARD_ORIGIN, Vector2(COLS, ROWS) * CELL_SIZE)
 	draw_rect(board_rect, Color(0.02, 0.04, 0.06, 0.78))
-	var title := "PAUSED" if paused else "GAME OVER"
-	var hint := "SPACE TO CONTINUE" if paused else "ENTER / R TO RESTART"
+	var is_paused := game_state == GameState.PAUSED
+
+	var title := "PAUSED" if is_paused else "GAME OVER"
+	var hint := "SPACE TO CONTINUE" if is_paused else "ENTER / R TO RESTART"
 	draw_string(ThemeDB.fallback_font, Vector2(0, 410), title, HORIZONTAL_ALIGNMENT_CENTER, 720, 42, Color("eaf7ef"))
 	draw_string(ThemeDB.fallback_font, Vector2(0, 455), hint, HORIZONTAL_ALIGNMENT_CENTER, 720, 19, Color("75e6a4"))
 
 
 func _on_move_timer_timeout() -> void:
-	if not game_over and not paused:
+	if game_state == GameState.PLAYING:
 		step_game()

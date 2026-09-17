@@ -1,0 +1,136 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十一课：显式游戏状态</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 11 · 约 30 分钟</p>
+<h1>用一个状态替代两个布尔值</h1>
+<p class="lead">这一课的胜利条件：使用枚举统一表示 Playing、Paused、Game Over，使 Timer、输入和覆盖层只依赖一个可信状态。</p>
+
+<h2>1. 两个 bool 可以表达错误世界</h2>
+<pre><code>var game_over := false
+var paused := false</code></pre>
+<p>两个布尔值有四种组合：</p>
+<table><thead><tr><th>game_over</th><th>paused</th><th>含义</th></tr></thead><tbody>
+<tr><td>false</td><td>false</td><td>正常运行</td></tr>
+<tr><td>false</td><td>true</td><td>暂停</td></tr>
+<tr><td>true</td><td>false</td><td>游戏结束</td></tr>
+<tr><td>true</td><td>true</td><td>语义冲突</td></tr>
+</tbody></table>
+<p>最后一种组合本不应该存在，但数据结构允许它。枚举让“恰好处于一个状态”成为代码结构本身的约束。</p>
+
+<h2>2. 声明 GameState</h2>
+<p>删除两个 bool，改为：</p>
+<pre><code>enum GameState {
+    PLAYING,
+    PAUSED,
+    GAME_OVER,
+}
+
+var game_state := GameState.PLAYING</code></pre>
+<p>枚举底层仍是整数，但命名值让状态分支可读，也避免随意组合。</p>
+
+<h2>3. 建立唯一状态入口</h2>
+<p>添加：</p>
+<pre><code>func set_game_state(next_state: GameState) -&gt; void:
+    if game_state == next_state:
+        return
+
+    game_state = next_state
+
+    match game_state:
+        GameState.PLAYING:
+            move_timer.paused = false
+        GameState.PAUSED:
+            move_timer.paused = true
+        GameState.GAME_OVER:
+            move_timer.stop()
+
+    queue_redraw()</code></pre>
+<p>以后不直接写 <code>game_state = ...</code>，统一调用这个函数。它是状态转换的单一入口，副作用集中在一处。</p>
+
+<h2>4. 新游戏进入 Playing</h2>
+<p>在 <code>new_game()</code> 中删除：</p>
+<pre><code>game_over = false
+paused = false</code></pre>
+<p>把启动 Timer 的部分整理为：</p>
+<pre><code>set_game_state(GameState.PLAYING)
+move_timer.start(rules.start_speed)</code></pre>
+<p>如果刚从 Game Over 重开，Timer 已停止；因此仍需要显式 <code>start()</code>。</p>
+
+<h2>5. 输入变成状态转换</h2>
+<p>把暂停与重开动作改为：</p>
+<pre><code>elif event.is_action_pressed("pause_game"):
+    match game_state:
+        GameState.PLAYING:
+            set_game_state(GameState.PAUSED)
+        GameState.PAUSED:
+            set_game_state(GameState.PLAYING)
+
+elif event.is_action_pressed("restart_game"):
+    if game_state == GameState.GAME_OVER:
+        new_game()</code></pre>
+<p>方向排队条件改为：</p>
+<pre><code>func queue_direction(next_direction: Vector2i) -&gt; void:
+    if (
+        game_state == GameState.PLAYING
+        and next_direction != -direction
+    ):
+        queued_direction = next_direction</code></pre>
+
+<h2>6. Timer 与结束流程</h2>
+<p>回调改为：</p>
+<pre><code>func _on_move_timer_timeout() -&gt; void:
+    if game_state == GameState.PLAYING:
+        step_game()</code></pre>
+<p><code>finish_game()</code> 改为：</p>
+<pre><code>func finish_game() -&gt; void:
+    set_game_state(GameState.GAME_OVER)
+    high_score = maxi(high_score, score)
+    games_played += 1
+    save_progress()</code></pre>
+<p>停止 Timer 和重绘已经由状态入口负责，不再在结束函数重复处理。</p>
+
+<h2>7. 覆盖层只读一个状态</h2>
+<p>在 <code>_draw()</code> 中：</p>
+<pre><code>if game_state != GameState.PLAYING:
+    draw_overlay()</code></pre>
+<p>在 <code>draw_overlay()</code> 中：</p>
+<pre><code>var is_paused := game_state == GameState.PAUSED
+var title := "PAUSED" if is_paused else "GAME OVER"
+var hint := (
+    "SPACE TO CONTINUE"
+    if is_paused
+    else "ENTER / R TO RESTART"
+)</code></pre>
+
+<h2>8. 完成机械检查</h2>
+<div class="card task">
+<ol>
+<li>全局搜索 <code>game_over</code>，结果应为 0。</li>
+<li>全局搜索独立变量 <code>paused</code>，除 <code>move_timer.paused</code> 和局部 <code>is_paused</code> 外不应存在。</li>
+<li>正常运行、暂停、恢复、撞墙和重开各测试一次。</li>
+<li>暂停时蛇停止；Food 呼吸仍继续——记录这个观察。</li>
+<li>游戏结束时存档仍正确写入。</li>
+</ol>
+</div>
+
+<h2>9. 业务暂停与 SceneTree 暂停</h2>
+<p>本课实现的是<strong>业务状态暂停</strong>：只暂停 MoveTimer，所以 Food 的 AnimationPlayer 和 HUD Tween 继续运行。</p>
+<pre><code># 引擎级暂停
+get_tree().paused = true</code></pre>
+<p>SceneTree 暂停会依据每个节点的 Process Mode 停止处理、物理、动画与音频。暂停菜单必须设为 When Paused 或 Always，才能接收恢复操作。小型网格游戏使用业务状态足够清晰；物理对象很多的游戏更适合引擎级暂停。</p>
+
+<h2>10. 为什么状态副作用要集中？</h2>
+<p>若暂停输入、结束函数和重开函数各自修改 Timer、Overlay、音效和动画，很容易遗漏某一项。集中入口让未来添加背景音乐或暂停菜单时，只改一个 <code>match</code>。</p>
+<div class="card"><strong>边界：</strong>这不是需要通用状态机框架的复杂项目。一个 enum、一个当前状态、一个转换函数已经足够；不要为了三个状态引入抽象基类或状态对象。</div>
+
+<h2>11. 闭卷检索</h2>
+<details><summary>问题 1：enum 相比两个 bool 的核心优势是什么？</summary><p>它只允许一个命名状态，无法表达“同时暂停且游戏结束”等无效组合。</p></details>
+<details><summary>问题 2：为什么所有转换都经过 set_game_state？</summary><p>Timer、重绘等副作用集中在一个入口，避免每个调用点重复并遗漏状态同步。</p></details>
+<details><summary>问题 3：为什么 Food 在本课暂停时仍然呼吸？</summary><p>本课只暂停了 MoveTimer，没有设置 SceneTree.paused；AnimationPlayer 仍按自己的 Process Mode 正常处理。</p></details>
+
+<h2>加一分挑战</h2>
+<p>添加 <code>signal game_state_changed(previous, current)</code>。在 <code>set_game_state()</code> 保存旧值并于转换后 emit。暂时只在调试输出中订阅它，不要为了使用信号强行拆更多场景。</p>
+
+<h2>主阅读</h2>
+<p>阅读 Godot 官方 <a href="https://docs.godotengine.org/en/stable/tutorials/scripting/pausing_games.html">Pausing games and process mode</a>，重点理解 Inherit、Pausable、When Paused、Always；本课不要求改用 SceneTree 暂停。</p>
+
+<footer><a href="0010-animation-and-feedback.html">← 第十课</a> · <a href="../reference/unity-to-godot.html">Unity → Godot 速查</a><br><br>完成后回复：<strong>“状态机已接入”</strong>，并回答：<em>为什么两个 bool 会允许 enum 无法表示的错误状态？</em></footer>
+</main></body></html>

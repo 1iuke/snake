@@ -38,6 +38,10 @@
   官方 AnimationPlayer、轨道与关键帧教程。用于制作可视化编辑和循环播放的动画。
 - [Godot 4.7：Tween](https://docs.godotengine.org/en/4.7/classes/class_tween.html)
   官方代码补间与生命周期说明。用于制作由运行时事件触发的一次性反馈动画。
+- [Godot：暂停游戏与 Process Mode](https://docs.godotengine.org/en/stable/tutorials/scripting/pausing_games.html)
+  官方 SceneTree 暂停和节点处理模式说明。用于区分业务状态与引擎级暂停。
+- [Godot：GDScript enum 与 match](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html)
+  官方枚举与模式匹配语法。用于表达互斥游戏状态和集中状态转换。
 
 ## Wisdom (Communities)
 
