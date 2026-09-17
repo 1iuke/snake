@@ -6,6 +6,7 @@ const ROWS := 20
 const CELL_SIZE := 30.0
 const BOARD_ORIGIN := Vector2(60, 140)
 @export var rules: GameRules
+const SAVE_PATH := "user://scores.cfg"
 
 
 var snake: Array[Vector2i] = []
@@ -17,6 +18,7 @@ var food_visual: Node2D
 
 var score := 0
 var high_score := 0
+var games_played:= 0
 @onready var move_timer: Timer = $MoveTimer
 
 var game_over := false
@@ -27,17 +29,43 @@ func _ready() -> void:
 	randomize()
 	food_visual = FOOD_SCENE.instantiate()
 	add_child(food_visual)
+	load_progress()
 	new_game()
+	
+func load_progress() -> void:
+	var config := ConfigFile.new()
+	var error := config.load(SAVE_PATH)
+
+	if error == ERR_FILE_NOT_FOUND:
+		return
+	if error != OK:
+		push_warning("Could not load high score: %s" % error)
+		return
 
 
+	high_score = maxi(
+		0,
+		int(config.get_value("scores", "high_score", 0))
+	)
+	games_played = maxi(
+		0,
+		int(config.get_value("stats", "games_played", 0))
+	)
+
+func save_progress() -> void:
+	var config := ConfigFile.new()
+	config.set_value("scores", "high_score", high_score)
+	config.set_value("stats", "games_played", games_played )
+	var error := config.save(SAVE_PATH)
+	if error != OK:
+		push_error("Could not save high score: %s" % error)
+		
 func new_game() -> void:
 	snake = [Vector2i(7, 10), Vector2i(6, 10), Vector2i(5, 10)]
 	direction = Vector2i.RIGHT
 	queued_direction = direction
 	score = 0
-	
 	score_changed.emit(score, high_score)
-
 	move_timer.start(rules.start_speed)
 	game_over = false
 	paused = false
@@ -121,6 +149,8 @@ func finish_game() -> void:
 	move_timer.stop()
 	game_over = true
 	high_score = maxi(high_score, score)
+	games_played += 1
+	save_progress()
 	queue_redraw()
 
 
