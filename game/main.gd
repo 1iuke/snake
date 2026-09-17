@@ -42,9 +42,12 @@ func _ready() -> void:
 	new_game()
 	
 func _on_progress_saved() -> void:
+	var summary: Dictionary = await SnakeApp.send_query(
+		ProgressSummaryQuery.new()
+	)
 	print(
         "Progress saved: best=%d, games=%d"
-		% [progress_model.high_score, progress_model.games_played]
+		% [summary.high_score, summary.games_played]
 	)	
 func set_game_state(next_state: GameState) -> void:
 	if game_state == next_state:

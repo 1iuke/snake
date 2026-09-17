@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第二十一课：QFramework Query</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 06 · v0.4.1 · 约 20 分钟</p>
+<h1>把组合读取表达成 Query</h1>
+<p class="lead">本课的胜利条件：<code>progress_saved</code> 发生后，场景通过 <code>ProgressSummaryQuery</code> 获得只读进度快照，而不是自己组合多个 Model 字段。</p>
+
+<h2>1. Query 是读取用例，不是 Model 的替代品</h2>
+<pre><code>Command：我要改变什么？  → 写
+Query：  我想知道什么？  → 读
+Event：  什么已经发生？  → 通知</code></pre>
+<p>Query 适合组合、转换或跨多个来源的读取。像 <code>progress_model.high_score</code> 这样的单字段读取通常无需封装，否则只是增加跳转。</p>
+
+<h2>2. 生成 ProgressSummaryQuery</h2>
+<div class="card task"><ol>
+<li>按 <kbd>Ctrl</kbd> + <kbd>E</kbd> 打开 QFramework 面板。</li>
+<li>选择 <strong>创建 Query</strong>。</li>
+<li>名称输入 <code>ProgressSummary</code>，确认生成类名与路径。</li>
+<li>点击创建。</li>
+</ol></div>
+<p>修改 <code>scripts/queries/progress_summary_query.gd</code>：</p>
+<pre><code>class_name ProgressSummaryQuery extends AbstractQuery
+
+func do() -&gt; Dictionary:
+    var model := get_model(ProgressModel.NAME) as ProgressModel
+    assert(model != null, "ProgressModel is not registered")
+
+    return {
+        "high_score": model.high_score,
+        "games_played": model.games_played,
+    }</code></pre>
+<p>与 Command 一样，Query 是一次性对象，不需要注册。<code>send_query()</code> 会临时注入 Architecture。</p>
+
+<h2>3. 在事件回调中执行 Query</h2>
+<p>把 <code>main.gd</code> 的临时诊断回调改为：</p>
+<pre><code>func _on_progress_saved() -&gt; void:
+    var summary: Dictionary = await SnakeApp.send_query(
+        ProgressSummaryQuery.new()
+    )
+    print(
+        "Progress saved: best=%d, games=%d"
+        % [summary.high_score, summary.games_played]
+    )</code></pre>
+<p>使用 <code>await</code> 是因为 QFramework v0.4.1 的 <code>send_query()</code> 会等待 <code>query.do()</code>。当前查询同步完成，但调用方式同样兼容未来的异步查询。</p>
+
+<h2>4. 为什么返回快照而不是 Model</h2>
+<p>如果 Query 直接返回 <code>ProgressModel</code>，调用方仍能修改它，读取边界形同虚设。返回新的 Dictionary 后，调用方拿到的是所需数据快照：</p>
+<ul>
+<li>只暴露这次读取需要的字段；</li>
+<li>不会把 Model 本身交给外部；</li>
+<li>未来可在 Query 内组合多个 Model 或 System。</li>
+</ul>
+<p>Dictionary 适合当前小例子；大型项目可改用带类型的结果对象。</p>
+
+<h2>5. 不要删除 progress_model 引用</h2>
+<p><code>main.gd</code> 目前仍需：</p>
+<ul>
+<li>订阅 <code>progress_model.progress_saved</code>；</li>
+<li>向局部 HUD 信号提供最高分；</li>
+<li>在吃到食物时更新最高分。</li>
+</ul>
+<p>因此本课不为了“纯 CQRS”强行移除 Model 引用。架构规则服务于真实复杂度，而不是追求形式上的零直接访问。</p>
+
+<h2>6. 验证</h2>
+<div class="card task"><ol>
+<li>运行游戏并完成一局。</li>
+<li>确认 Output 的最高分和局数正确。</li>
+<li>在 Query 的 <code>do()</code> 中下断点，观察 Architecture 已被注入。</li>
+<li>确认 Query 内没有修改 Model 的语句。</li>
+<li>验证后删除断点。</li>
+</ol></div>
+
+<h2>7. 什么时候不该创建 Query</h2>
+<table><thead><tr><th>读取需求</th><th>建议</th></tr></thead><tbody>
+<tr><td>读取一个公开字段</td><td>直接读取</td></tr>
+<tr><td>组合多个 Model 字段</td><td>考虑 Query</td></tr>
+<tr><td>包含筛选、排序、聚合</td><td>使用 Query</td></tr>
+<tr><td>会修改任何业务状态</td><td>改用 Command</td></tr>
+</tbody></table>
+
+<h2>8. 闭卷检索</h2>
+<details><summary>为什么 Query 不应该修改 Model？</summary><p>Query 表达读取；若同时写入，调用方无法仅凭类型判断副作用，读写边界会失去意义。</p></details>
+<details><summary>为什么不为每次 high_score 读取都创建 Query？</summary><p>单字段读取没有组合或转换复杂度，封装只增加间接层和文件数量。</p></details>
+<details><summary>为什么 Query 返回快照而不是 Model？</summary><p>快照限制暴露范围，并避免把可修改的共享状态引用交给读取方。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/12.%20引入%20Query.md">引入 Query</a>，并对照 <a href="../addons/qframework/framework/architecture/abstract_query.gd">AbstractQuery</a> 与 <a href="../addons/qframework/framework/architecture/architecture.gd">Architecture.send_query()</a> 源码。</p>
+
+<footer><a href="0020-qframework-event-cqrs.html">← 第二十课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“进度读取已查询化”</strong>，并回答：<em>为什么 Query 应返回快照，而不是直接返回 Model？</em><br><br>如果 <code>await</code> 或 Dictionary 访问报错，把完整错误和对应代码发给我。</footer>
+</main></body></html>
