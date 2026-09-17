@@ -5,6 +5,6 @@ func do() -> Dictionary:
 	assert(model != null, "ProgressModel is not registered")
 
 	return {
-		"high_score": model.high_score,
+		"high_score": int(model.high_score.value),
 		"games_played": model.games_played,
 	}

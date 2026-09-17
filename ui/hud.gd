@@ -8,27 +8,37 @@ const BEST_RECORD_COLOR := Color("ffd166")
 
 var displayed_high_score := -1
 var best_tween: Tween
+var progress_model: ProgressModel
 
+func _ready() -> void:
+	progress_model = SnakeApp.get_model(ProgressModel.NAME) as ProgressModel
+	assert(progress_model != null, "ProgressModel is not registered")
 
+	progress_model.high_score.register_with_init_value(
+		_on_high_score_changed
+	).un_register_when_node_exiting_tree(self)
+	
 func _on_snake_game_score_changed(
 	new_score: int,
-	new_high_score: int
 ) -> void:
 	score_label.text = "SCORE  %04d" % new_score
-	best_label.text = "BEST  %04d" % new_high_score
+	animate_score()
 	
+func _on_high_score_changed(new_high_score) -> void:
+	var value := int(new_high_score)
+	best_label.text = "BEST  %04d" % value
+
 	var is_initial_update := displayed_high_score < 0
 	var is_new_record := (
 		not is_initial_update
-		and new_high_score > displayed_high_score
+		and value > displayed_high_score
 	)
-	displayed_high_score = new_high_score
-	
-	animate_score()
+	displayed_high_score = value
 
 	if is_new_record:
 		animate_new_record()
-		
+	else:
+		best_label.modulate = BEST_NORMAL_COLOR		
 func animate_score() -> void:
 	if score_tween:
 		score_tween.kill()
@@ -83,3 +93,5 @@ func animate_new_record() -> void:
 				BEST_NORMAL_COLOR
 			)
 	)
+func _exit_tree() -> void:
+	progress_model = null

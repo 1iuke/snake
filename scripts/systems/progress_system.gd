@@ -18,10 +18,9 @@ func init() -> void:
 	assert(_model != null, "ProgressModel is not registered")
 	assert(_storage != null, "StorageUtility is not registered")
 
-	_model.high_score = maxi(
-		0,
-		_storage.load_int(SCORE_SECTION, HIGH_SCORE_KEY)
-	)
+	_model.high_score.set_value_without_event(
+		maxi(0, _storage.load_int(SCORE_SECTION, HIGH_SCORE_KEY))
+	)		
 	_model.games_played = maxi(
 		0,
 		_storage.load_int(STATS_SECTION, GAMES_PLAYED_KEY)
@@ -30,7 +29,7 @@ func init() -> void:
 func complete_game(final_score: int) -> void:
 	_model.update_high_score(final_score)
 	_model.games_played += 1
-	_storage.set_int(SCORE_SECTION, HIGH_SCORE_KEY, _model.high_score)
+	_storage.set_int(SCORE_SECTION, HIGH_SCORE_KEY,     int(_model.high_score.value))
 	_storage.set_int(STATS_SECTION, GAMES_PLAYED_KEY, _model.games_played)
 
 	var error := _storage.flush()

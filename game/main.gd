@@ -1,5 +1,5 @@
 extends Node2D
-signal score_changed(new_score: int, new_high_score: int)
+signal score_changed(new_score: int)
 @onready var eat_sound: AudioStreamPlayer2D = $EatSound
 
 const COLS := 20
@@ -70,7 +70,7 @@ func new_game() -> void:
 	direction = Vector2i.RIGHT
 	queued_direction = direction
 	score = 0
-	score_changed.emit(score, progress_model.high_score)
+	score_changed.emit(score)
 	set_game_state(GameState.PLAYING)
 	move_timer.start(rules.start_speed)
 	spawn_food()
@@ -122,7 +122,7 @@ func step_game() -> void:
 		eat_sound.play()
 		score += rules.score_per_food
 		progress_model.update_high_score(score)
-		score_changed.emit(score, progress_model.high_score)
+		score_changed.emit(score)
 		move_timer.wait_time = maxf(
 			rules.min_speed,
 			rules.start_speed - score * rules.speed_up_per_point)

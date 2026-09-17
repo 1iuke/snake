@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第二十三课：BindableProperty 数据绑定</title><link rel="stylesheet" href="../assets/course.css"></head>
+<body><main>
+<p class="eyebrow">QFramework 08 · v0.4.1 · 约 35 分钟</p>
+<h1>让最高分自己通知 HUD</h1>
+<p class="lead">本课的胜利条件：<code>score_changed</code> 只负责本局分数；<code>BestLabel</code> 直接订阅 <code>ProgressModel.high_score</code>，最高分改变时自动刷新。</p>
+
+<h2>1. BindableProperty = 值 + 变更事件</h2>
+<p>当前最高分由裸整数保存，调用方还要记得通知 UI。BindableProperty 把二者组合：</p>
+<pre><code>high_score.value = 50
+        ↓ 值确实发生变化
+自动通知所有订阅者</code></pre>
+<p>重复赋相同值不会触发事件；这由 QFramework v0.4.1 的属性 setter 保证。</p>
+
+<h2>2. 修改 ProgressModel</h2>
+<p>把：</p>
+<pre><code>var high_score := 0</code></pre>
+<p>改为：</p>
+<pre><code>var high_score := BindableProperty.new(0)</code></pre>
+<p>同步修改更新规则：</p>
+<pre><code>func update_high_score(candidate: int) -&gt; void:
+    high_score.value = maxi(int(high_score.value), candidate)</code></pre>
+<p><code>games_played</code> 暂时仍是整数，因为当前没有界面需要对它持续响应。不要为了统一外观而批量包装所有字段。</p>
+
+<h2>3. 修正 ProgressSystem 的读写</h2>
+<p>加载初始值时使用无事件赋值：</p>
+<pre><code>_model.high_score.set_value_without_event(
+    maxi(0, _storage.load_int(SCORE_SECTION, HIGH_SCORE_KEY))
+)</code></pre>
+<p>保存时读取 <code>.value</code>：</p>
+<pre><code>_storage.set_int(
+    SCORE_SECTION,
+    HIGH_SCORE_KEY,
+    int(_model.high_score.value)
+)</code></pre>
+<p>启动加载不是玩家操作产生的“变化”；HUD 稍后使用 <code>register_with_init_value()</code>，仍能立即拿到已加载值。</p>
+
+<h2>4. 修正 ProgressSummaryQuery</h2>
+<pre><code>return {
+    "high_score": int(model.high_score.value),
+    "games_played": model.games_played,
+}</code></pre>
+<p>Query 返回普通整数快照，不把 BindableProperty 或 Model 引用暴露给读取者。</p>
+
+<h2>5. 收窄 main.gd 的局部 Signal</h2>
+<p>把信号改为只传当前分数：</p>
+<pre><code>signal score_changed(new_score: int)</code></pre>
+<p>所有发射位置改为：</p>
+<pre><code>score_changed.emit(score)</code></pre>
+<p><code>main.gd</code> 不再为了刷新 BestLabel 而读取最高分。它仍可取得 ProgressModel，因为需要订阅 <code>progress_saved</code> 并调用 <code>update_high_score()</code>。</p>
+
+<h2>6. 让 HUD 绑定最高分</h2>
+<p>在 <code>hud.gd</code> 添加 Model 引用：</p>
+<pre><code>var progress_model: ProgressModel</code></pre>
+<p>在 <code>_ready()</code> 中绑定：</p>
+<pre><code>func _ready() -&gt; void:
+    progress_model = SnakeApp.get_model(ProgressModel.NAME) as ProgressModel
+    assert(progress_model != null, "ProgressModel is not registered")
+
+    progress_model.high_score.register_with_init_value(
+        _on_high_score_changed
+    ).un_register_when_node_exiting_tree(self)</code></pre>
+<p>把原来的分数回调缩为：</p>
+<pre><code>func _on_snake_game_score_changed(new_score: int) -&gt; void:
+    score_label.text = "SCORE  %04d" % new_score
+    animate_score()</code></pre>
+<p>新增最高分回调，并把原有新纪录判断与动画移进来：</p>
+<pre><code>func _on_high_score_changed(new_high_score) -&gt; void:
+    var value := int(new_high_score)
+    best_label.text = "BEST  %04d" % value
+
+    var is_initial_update := displayed_high_score &lt; 0
+    var is_new_record := (
+        not is_initial_update
+        and value &gt; displayed_high_score
+    )
+    displayed_high_score = value
+
+    if is_new_record:
+        animate_new_record()
+    else:
+        best_label.modulate = BEST_NORMAL_COLOR</code></pre>
+<p>保留你项目中实际的新纪录动画函数名；若函数名不同，迁移逻辑而不是机械复制名称。</p>
+
+<h2>7. 生命周期清理</h2>
+<p>自动注销已经随 HUD 的 <code>tree_exiting</code> 完成。在 <code>_exit_tree()</code> 中只需释放普通引用：</p>
+<pre><code>func _exit_tree() -&gt; void:
+    progress_model = null</code></pre>
+
+<h2>8. 验证</h2>
+<div class="card task"><ol>
+<li>启动游戏，BestLabel 应立即显示存档值，不需要先吃食物。</li>
+<li>得到新纪录时，BestLabel 更新并播放原有黄色弹跳。</li>
+<li>未超过最高分时，BestLabel 不重复触发新纪录动画。</li>
+<li>当前 SCORE 仍随每次吃食物更新。</li>
+<li>搜索 <code>score_changed.emit</code>：每处只传一个参数。</li>
+<li>搜索 <code>high_score</code> 的数值访问：需要数值的位置都应使用 <code>.value</code>。</li>
+</ol></div>
+
+<h2>9. 何时不用 BindableProperty</h2>
+<ul>
+<li>只在一个函数内使用的临时变量；</li>
+<li>没有任何观察者的局部状态；</li>
+<li>多个字段必须作为不可分割事务一起变化时；</li>
+<li>每帧高频变化且订阅通知没有价值的数据。</li>
+</ul>
+
+<h2>10. 闭卷检索</h2>
+<details><summary>为什么加载时使用 set_value_without_event？</summary><p>加载是在建立初始状态，不是一次运行时变化；HUD 随后通过 register_with_init_value 获取当前值。</p></details>
+<details><summary>为什么 Query 返回 high_score.value 而非 high_score？</summary><p>查询应返回数据快照，不应暴露带写能力和订阅能力的 BindableProperty 对象。</p></details>
+<details><summary>为什么 games_played 暂时不改成 BindableProperty？</summary><p>当前没有需要持续响应它的订阅者，包装后没有收益，只会增加访问语法。</p></details>
+
+<h2>主阅读</h2>
+<p>阅读项目随附的 <a href="../addons/qframework/doc/07.%20Architecture/10.%20使用%20BindableProperty%20优化事件.md">使用 BindableProperty 优化事件</a>，并直接查看 <a href="../addons/qframework/framework/corekit/easy_event/scripts/bindable_property.gd">BindableProperty 源码</a>。</p>
+
+<footer><a href="0022-qframework-system.html">← 第二十二课</a> · <a href="../reference/qframework-architecture-map.html">分层速查</a><br><br>完成后回复：<strong>“最高分已数据绑定”</strong>，并回答：<em>为什么启动加载使用 set_value_without_event，HUD 仍能显示初始值？</em><br><br>如果信号参数数量报错，请同时检查 signal 定义、emit 和连接的方法签名。</footer>
+</main></body></html>
