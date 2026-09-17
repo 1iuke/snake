@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第十四课：导出可分发的 Windows 游戏</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="eyebrow">Lesson 14 · 核心课程收官 · 约 25 分钟</p>
+  <h1>让 Snake 离开编辑器独立运行</h1>
+  <p class="lead">本课的唯一成果：生成一个 Release 版本，把它复制到项目目录之外，确认游戏不依赖 Godot 编辑器也能完整运行。</p>
+
+  <h2>1. 先区分三个概念</h2>
+  <table>
+    <thead><tr><th>对象</th><th>用途</th><th>能否直接交给玩家</th></tr></thead>
+    <tbody>
+      <tr><td>项目目录</td><td>源场景、脚本、资源与导入缓存</td><td>不推荐</td></tr>
+      <tr><td>Export PCK/ZIP</td><td>只导出项目数据，不含运行程序</td><td>不能独立运行</td></tr>
+      <tr><td>Export Project</td><td>导出优化后的运行程序与所需数据</td><td>可以</td></tr>
+    </tbody>
+  </table>
+  <p>类比 Unity：Godot 的 <strong>Export Project</strong> 接近 Unity 的 <strong>Build</strong>，而不是把工程文件夹打包发送。</p>
+
+  <h2>2. 检查主场景</h2>
+  <div class="card task">
+    <ol>
+      <li>打开 <strong>Project → Project Settings → Application → Run</strong>。</li>
+      <li>确认 <strong>Main Scene</strong> 指向 <code>main.tscn</code>。</li>
+      <li>按 <kbd>F6</kbd> 只运行当前场景，再按 <kbd>F5</kbd> 运行项目，确认两者的含义不同。</li>
+    </ol>
+  </div>
+  <p><kbd>F5</kbd> 使用 Main Scene；导出后的程序也从 Main Scene 开始。编辑器当前打开哪个场景并不重要。</p>
+
+  <h2>3. 安装 Export Templates</h2>
+  <div class="card task">
+    <ol>
+      <li>选择 <strong>Editor → Manage Export Templates</strong>。</li>
+      <li>安装与当前 Godot 版本完全匹配的模板。</li>
+      <li>如果已经显示 Installed，直接进入下一步。</li>
+    </ol>
+  </div>
+  <p>编辑器负责开发，Export Template 是面向目标平台的精简运行程序。没有模板，项目能在编辑器中运行，却不能生成正式构建。</p>
+
+  <h2>4. 创建 Windows Desktop 预设</h2>
+  <div class="card task">
+    <ol>
+      <li>打开 <strong>Project → Export</strong>。</li>
+      <li>点击 <strong>Add… → Windows Desktop</strong>。</li>
+      <li>本机常规 Windows 电脑保持 <strong>x86_64</strong>。</li>
+      <li>将 Export Path 设为 <code>build/windows/Snake.exe</code>。</li>
+      <li>首次练习保持 <strong>Export All Resources</strong>，不要提前手动筛资源。</li>
+    </ol>
+  </div>
+  <p><code>export_presets.cfg</code> 保存预设，通常可以纳入版本控制；凭据则保存在 <code>.godot/export_credentials.cfg</code>，不应公开分享。</p>
+
+  <h2>5. 导出 Release，而不是 PCK</h2>
+  <div class="card task">
+    <ol>
+      <li>选择刚创建的 Windows Desktop 预设。</li>
+      <li>点击 <strong>Export Project</strong>。</li>
+      <li>关闭 <strong>Export With Debug</strong>，导出 Release 版本。</li>
+      <li>等待生成 <code>Snake.exe</code>；若旁边还有数据文件，分发时必须一起保留。</li>
+    </ol>
+  </div>
+  <p><strong>Export PCK/ZIP</strong> 只产生资源包，不是这次要交付的可执行游戏。</p>
+
+  <h2>6. 做一次真正的“陌生环境”测试</h2>
+  <div class="card task">
+    <ol>
+      <li>新建一个不在项目目录中的临时文件夹。</li>
+      <li>把整个 Windows 构建复制进去，不要只复制你猜测需要的文件。</li>
+      <li>退出 Godot 编辑器，再双击 <code>Snake.exe</code>。</li>
+      <li>测试移动、暂停、吃食物、死亡、重开和声音。</li>
+      <li>创造最高分，关闭程序后重开，确认最高分仍在。</li>
+    </ol>
+  </div>
+  <p>这一测试同时验证了两个重要路径：</p>
+  <pre><code>res://  → 被打包的只读游戏资源
+user:// → 玩家机器上的可写用户数据</code></pre>
+  <p>因此你的最高分必须写入 <code>user://</code>，不能依赖项目目录。</p>
+
+  <h2>7. 最小交付包</h2>
+  <p>把构建输出压缩为 ZIP，再交给测试者。ZIP 中只包含运行游戏所需的文件，不要包含：</p>
+  <ul>
+    <li><code>.godot/</code>、脚本源码或课程 HTML；</li>
+    <li>本机的 <code>user://stats.cfg</code>；</li>
+    <li>导出凭据、证书或密码；</li>
+    <li>项目的调试截图和临时文件。</li>
+  </ul>
+
+  <h2>8. 可选：把手工导出变成可重复命令</h2>
+  <p>创建并保存预设后，可在 PowerShell 中使用：</p>
+  <pre><code>&amp; "Godot.exe" --path "E:\Workspace\GameDevelop\Godot\snake" `
+  --export-release "Windows Desktop" "build\windows\Snake.exe"</code></pre>
+  <p>预设名称必须与 Export 窗口完全一致。命令行导出不是另一套构建系统，它只是复用了 <code>export_presets.cfg</code>。</p>
+
+  <h2>9. 收官验收</h2>
+  <div class="card task">
+    <ul>
+      <li>程序可在 Godot 关闭时启动。</li>
+      <li>主循环、暂停、重开、音效和 HUD 均正常。</li>
+      <li>从不同目录启动也不丢失资源。</li>
+      <li>重启程序后最高分仍存在。</li>
+      <li>ZIP 解压后无需安装 Godot 即可运行。</li>
+    </ul>
+  </div>
+
+  <h2>闭卷检索</h2>
+  <details><summary>为什么编辑器中能运行，仍可能无法导出？</summary><p>编辑器自带开发运行环境；导出还需要与当前引擎版本和目标平台匹配的 Export Templates。</p></details>
+  <details><summary>为什么不能只把 PCK 文件发给玩家？</summary><p>PCK 主要包含项目数据，不包含能够独立启动这些数据的目标平台运行程序。</p></details>
+  <details><summary>为什么必须把构建复制到项目外测试？</summary><p>它能暴露意外依赖项目路径、遗漏构建文件以及把存档写入错误位置等问题。</p></details>
+
+  <h2>主阅读</h2>
+  <p>阅读 Godot 4.7 官方文档的 <a href="https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html">Exporting projects</a>，重点看 Export Templates、Export Project 与命令行导出部分。</p>
+
+  <footer>
+    <a href="0013-release-refactor.html">← 第十三课</a> · <a href="../reference/release-checklist.html">发布检查表</a><br><br>
+    完成后回复：<strong>“Windows 构建已独立运行”</strong>，并回答：<em>为什么从项目目录之外启动，是一次比按 F5 更强的验证？</em><br><br>
+    遇到模板安装、导出错误或运行失败时，把完整报错发给我，我们一起定位。
+  </footer>
+</main>
+</body>
+</html>
