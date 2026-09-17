@@ -1,0 +1,112 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>第十三课：发布前重构</title><link rel="stylesheet" href="../assets/course.css"></head><body><main>
+<p class="eyebrow">Lesson 13 · 约 35 分钟</p>
+<h1>只清理有证据的问题</h1>
+<p class="lead">这一课的胜利条件：修复当前项目的场景覆盖、重复状态副作用、依赖错误和编码问题，并通过一组发布前质量门。</p>
+
+<h2>1. 重构不是“把代码变复杂”</h2>
+<p>当前项目约两百行核心代码，不需要通用状态机框架、依赖注入容器或十几个 Manager。发布前重构只处理已经观察到的问题：</p>
+<ul>
+<li>HUD 实例覆盖破坏了源场景布局。</li>
+<li>状态入口之外仍重复停止 Timer 和重绘。</li>
+<li>必需的 GameRules 没有启动时验证。</li>
+<li>底部提示包含损坏字符。</li>
+<li>全局音效使用了空间化播放器。</li>
+</ul>
+
+<h2>2. 清除 Hud 实例覆盖</h2>
+<p><code>hud.tscn</code> 已定义 Full Rect，<code>main.tscn</code> 的 Hud 实例不应再保存自己的锚点、Grow 或 Offset。</p>
+<div class="card task">
+<ol>
+<li>打开 <code>main.tscn</code>，选中实例 <code>Hud</code>。</li>
+<li>在 Inspector 的 Layout 中，对有还原箭头的覆盖属性逐项 Revert。</li>
+<li>保存后用文本查看 <code>main.tscn</code>。</li>
+</ol>
+</div>
+<p>目标应只剩：</p>
+<pre><code>[node name="Hud" parent="." instance=ExtResource("...")]</code></pre>
+<p>不应紧跟 <code>anchors_preset</code>、<code>anchor_*</code>、<code>offset_*</code> 或 <code>grow_*</code>。实例将完整继承 <code>hud.tscn</code>。</p>
+
+<h2>3. 修正 Hud 源场景内部布局</h2>
+<p>打开 <code>hud.tscn</code>，选中 <code>Margin</code>，应用 Full Rect，并确保四个 Offset 都为 0。当前出现的 <code>offset_right = 640</code>、<code>offset_bottom = 85</code> 是额外尺寸，不是右/下边距。</p>
+<p>真正的边距保留在 Theme Overrides：</p>
+<pre><code>Margin Left  = 60
+Margin Top   = 35
+Margin Right = 60</code></pre>
+
+<h2>4. 状态副作用只保留一个作者</h2>
+<p><code>set_game_state(GAME_OVER)</code> 已负责停止 Timer 和重绘，因此 <code>finish_game()</code> 改为：</p>
+<pre><code>func finish_game() -&gt; void:
+    set_game_state(GameState.GAME_OVER)
+    high_score = maxi(high_score, score)
+    games_played += 1
+    save_progress()</code></pre>
+<p>暂停输入中，删除 <code>set_game_state(...)</code> 之后多余的 <code>queue_redraw()</code>。规则是：状态导致的视觉与 Timer 副作用全部归状态入口管理。</p>
+
+<h2>5. 给必需依赖明确失败</h2>
+<p><code>rules</code> 是主游戏必需依赖。若场景忘记赋值，当前代码会稍后报模糊的 null 错误。添加：</p>
+<pre><code>func _ready() -&gt; void:
+    if rules == null:
+        push_error("SnakeGame requires a GameRules resource.")
+        return
+
+    randomize()
+    # 其余初始化……</code></pre>
+<p>这不是为“不可能情况”堆防御代码，而是在场景与脚本的依赖边界提供可行动的错误信息。</p>
+
+<h2>6. 修复编码与音效语义</h2>
+<p>将损坏的 footer 文本换成纯 ASCII，避免再次受文件编码影响：</p>
+<pre><code>"ARROWS / WASD  |  SPACE PAUSE"</code></pre>
+<p>吃食物声音属于非空间化全局反馈。把 <code>EatSound</code> 从 <code>AudioStreamPlayer2D</code> 改为 <code>AudioStreamPlayer</code>，并同步类型：</p>
+<pre><code>@onready var eat_sound: AudioStreamPlayer = $EatSound</code></pre>
+<p>只有声音应随世界位置、距离和声像变化时才使用 2D 播放器。</p>
+
+<h2>7. 清理格式而不改变设计</h2>
+<p>对自己改动过的文件执行以下机械清理：</p>
+<ul>
+<li>函数之间保留两行空行，不保留五行以上空白。</li>
+<li><code>games_played := 0</code> 等运算符两侧留空格。</li>
+<li>长参数列表分行并保持缩进。</li>
+<li>删除已注释掉的旧实现和临时调试输出。</li>
+</ul>
+<p>不要借机拆分稳定函数或重命名所有节点。每一行变更都应能对应一个实际问题。</p>
+
+<h2>8. 文件组织：现在不做大搬家</h2>
+<p>项目最终可采用：</p>
+<pre><code>game/       main.tscn, main.gd
+actors/     food.tscn, food.gd
+ui/         hud.tscn, hud.gd
+data/       game_rules.gd, *.tres
+audio/      *.wav, *.ogg</code></pre>
+<p>但发布前批量移动会产生大量路径变更，收益有限。当前文件数量很少，保持现状并记录未来结构即可。真正新增第二个角色或界面时，再按功能共置场景、脚本和资源。</p>
+
+<h2>9. 五道质量门</h2>
+<div class="card task">
+<ol>
+<li><strong>加载：</strong>Godot 编辑器打开项目无解析错误。</li>
+<li><strong>主流程：</strong>开始、得分、暂停、恢复、结束、重开均正常。</li>
+<li><strong>持久化：</strong>重启后最高分和局数仍在。</li>
+<li><strong>布局：</strong>Hud 实例没有覆盖，窗口变化时左右边距稳定。</li>
+<li><strong>资源：</strong>临时移除 Rules 时出现清楚错误；恢复后正常。</li>
+</ol>
+</div>
+
+<h2>10. 再跑一次静态搜索</h2>
+<pre><code>game_over       → 0 个结果
+var paused      → 0 个结果
+鈥              → 0 个结果
+breakpoint      → 0 个结果
+print(          → 只保留有意的诊断，最好为 0</code></pre>
+
+<h2>11. 闭卷检索</h2>
+<details><summary>问题 1：为什么实例覆盖会让源场景修复看起来“不生效”？</summary><p>加载实例时，实例保存的属性值会覆盖源场景默认值，因此修改源场景后仍可能看到旧布局。</p></details>
+<details><summary>问题 2：为什么 finish_game 不应再次 stop Timer？</summary><p>GAME_OVER 状态入口已经拥有这个副作用；重复执行会让职责分散，未来修改时容易漏改一处。</p></details>
+<details><summary>问题 3：为什么现在不批量移动全部文件？</summary><p>当前结构规模尚小，搬移只产生路径变更和回归风险；应在实际增长出现时按功能重组。</p></details>
+
+<h2>发布检查表</h2>
+<p><a href="../reference/release-checklist.html">打开可打印的 Godot 小游戏发布检查表</a></p>
+
+<h2>主阅读</h2>
+<p>复习官方 <a href="https://docs.godotengine.org/en/4.7/tutorials/best_practices/project_organization.html">Project organization</a>，重点关注按功能共置和文件名大小写建议。</p>
+
+<footer><a href="0012-debugging-and-profiling.html">← 第十二课</a> · <a href="../reference/release-checklist.html">发布检查表</a><br><br>完成后回复：<strong>“发布前重构完成”</strong>，并回答：<em>为什么状态副作用应该只有一个入口？</em></footer>
+</main></body></html>

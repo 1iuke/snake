@@ -14,7 +14,7 @@ var snake: Array[Vector2i] = []
 var direction := Vector2i.RIGHT
 var queued_direction := Vector2i.RIGHT
 var food := Vector2i.ZERO
-const FOOD_SCENE := preload("res://food.tscn")
+const FOOD_SCENE := preload("res://actors/food.tscn")
 var food_visual: Node2D
 
 var score := 0

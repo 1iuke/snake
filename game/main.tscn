@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://b2lppb5ccf4ke"]
+
+[ext_resource type="Script" uid="uid://dkgqptcou4e1q" path="res://game/main.gd" id="1_vop5m"]
+[ext_resource type="Resource" uid="uid://diqxvvtvgvw2p" path="res://data/default_rules.tres" id="2_5un7r"]
+[ext_resource type="PackedScene" uid="uid://ok7xv2xv4a8a" path="res://ui/hud.tscn" id="3_dgpao"]
+[ext_resource type="AudioStream" uid="uid://c8clig55lsr4d" path="res://audio/eat.wav" id="4_wjctj"]
+
+[node name="SnakeGame" type="Node2D" unique_id=2054477713]
+script = ExtResource("1_vop5m")
+rules = ExtResource("2_5un7r")
+
+[node name="MoveTimer" type="Timer" parent="." unique_id=557227788]
+
+[node name="Hud" parent="." unique_id=1496063164 instance=ExtResource("3_dgpao")]
+anchors_preset = 10
+anchor_bottom = 0.0
+grow_vertical = 1
+
+[node name="EatSound" type="AudioStreamPlayer2D" parent="." unique_id=1829323491]
+stream = ExtResource("4_wjctj")
+
+[connection signal="score_changed" from="." to="Hud" method="_on_snake_game_score_changed"]
+[connection signal="timeout" from="MoveTimer" to="." method="_on_move_timer_timeout"]

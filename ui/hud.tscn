@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ok7xv2xv4a8a"]
 
-[ext_resource type="Script" uid="uid://81acn3e5jk2j" path="res://hud.gd" id="1_37p78"]
+[ext_resource type="Script" uid="uid://81acn3e5jk2j" path="res://ui/hud.gd" id="1_37p78"]
 
 [node name="Hud" type="Control" unique_id=1530144216]
 custom_maximum_size = Vector2(0, 0)

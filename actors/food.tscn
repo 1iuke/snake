@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ca11d80nr768n"]
 
-[ext_resource type="Script" uid="uid://3mxp20aegpyg" path="res://food.gd" id="1_8txok"]
+[ext_resource type="Script" uid="uid://3mxp20aegpyg" path="res://actors/food.gd" id="1_8txok"]
 
 [sub_resource type="Animation" id="Animation_8txok"]
 length = 0.001
